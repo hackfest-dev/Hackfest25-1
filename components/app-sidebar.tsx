@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, Brain, CreditCard, Globe, Home, Map, PiggyBank, Receipt, Settings, User, Banknote } from "lucide-react"
+import { BarChart3, Brain, CreditCard, Globe, Home, Map, PiggyBank, Receipt, Settings, User, Banknote, LogOut } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/context/AuthContext"
 import useUserSettings from "@/hooks/use-user-settings"
+import { Button } from "@/components/ui/button"
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -174,6 +175,15 @@ export function AppSidebar() {
             <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
           </div>
           <ModeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => logout()}
+            className="h-8 w-8"
+            title="Log out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
