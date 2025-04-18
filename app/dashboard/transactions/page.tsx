@@ -74,6 +74,7 @@ import {
   FALLBACK_RATES, 
   getCurrencySymbol
 } from "@/lib/currency";
+import { Plus } from "lucide-react";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$",
@@ -461,7 +462,46 @@ export default function TransactionsPage() {
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
-          <TransactionDialog />
+          {/* Add Income Button */}
+          <TransactionDialog
+            buttonProps={{
+              variant: "outline",
+              className: "gap-1 shadow-sm text-green-600 hover:text-green-700 hover:bg-green-50"
+            }}
+            defaultValues={{
+              amount: 0,
+              type: 'income'
+            }}
+            trigger={
+              <Button
+                variant="outline"
+                className="gap-1 shadow-sm text-green-600 hover:text-green-700 hover:bg-green-50"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Income</span>
+              </Button>
+            }
+          />
+          {/* Add Expense Button */}
+          <TransactionDialog
+            buttonProps={{
+              variant: "default",
+              className: "gap-1 shadow-sm bg-red-600 hover:bg-red-700"
+            }}
+            defaultValues={{
+              amount: 0,
+              type: 'expense'
+            }}
+            trigger={
+              <Button
+                variant="default"
+                className="gap-1 shadow-sm bg-red-600 hover:bg-red-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Expense</span>
+              </Button>
+            }
+          />
         </div>
       </div>
       
@@ -518,10 +558,10 @@ export default function TransactionsPage() {
                           {date?.from ? (
                             date.to ? (
                               <>
-                                {format(date.from, "MMM d, yyyy")} - {format(date.to, "MMM d, yyyy")}
+                                {formatDate(date.from)} - {formatDate(date.to)}
                               </>
                             ) : (
-                              format(date.from, "MMM d, yyyy")
+                              formatDate(date.from)
                             )
                           ) : (
                             <span>Pick a date range</span>
@@ -595,7 +635,7 @@ export default function TransactionsPage() {
                           <SelectItem value="">All Countries</SelectItem>
                           {COUNTRIES.map((country) => (
                             <SelectItem key={country.code} value={country.name}>
-                              {country.flag} {country.name}
+                              {country.flagEmoji} {country.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -771,7 +811,7 @@ export default function TransactionsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(transaction.date), "MMM d, yyyy")}
+                          {formatDate(new Date(transaction.date))}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
@@ -918,7 +958,7 @@ export default function TransactionsPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Date</p>
                     <p className="font-medium">
-                      {format(new Date(transactionToDelete.date), "MMM d, yyyy")}
+                      {formatDate(new Date(transactionToDelete.date))}
                     </p>
                   </div>
                   <div>
@@ -948,4 +988,4 @@ export default function TransactionsPage() {
       </Dialog>
     </div>
   );
-} 
+}
