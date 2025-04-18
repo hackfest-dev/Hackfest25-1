@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-// Base URL for the ExchangeRate.host API
-const API_BASE_URL = 'https://api.exchangerate.host';
+// Use our internal API route instead of external API
+const API_BASE_URL = '/api/exchange-rates';
+
+// Base URL for the ExchangeRate API - using a more reliable free API
+const API_KEY = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY || '';
 
 // Interface for currency with country information
 export interface Currency {
@@ -280,20 +283,33 @@ export const NOMAD_DESTINATIONS: CountryData[] = [
  */
 export const getLatestRates = async (baseCurrency: string = 'USD'): Promise<ExchangeRateData> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/latest?base=${baseCurrency}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching exchange rates:', error);
-    // Fallback to static rates if API fails
-    const fallbackRates = convertRatesFromUSD(baseCurrency);
-    
+    // Try primary API first
+    const response = await axios.get(`${API_BASE_URL}/latest/${baseCurrency}`);
     return {
       base: baseCurrency,
       date: new Date().toISOString().split('T')[0],
-      rates: fallbackRates,
+      rates: response.data.rates,
       success: true,
       timestamp: Math.floor(Date.now() / 1000)
     };
+  } catch (error) {
+    console.error('Error fetching from primary API, trying backup API:', error);
+    
+    try {
+      // Try backup API
+      const backupResponse = await axios.get(`https://api.exchangerate.host/latest?base=${baseCurrency}`);
+      return backupResponse.data;
+    } catch (backupError) {
+      console.error('Error fetching from backup API, using fallback rates:', backupError);
+      // Only use fallback rates if both APIs fail
+      return {
+        base: baseCurrency,
+        date: new Date().toISOString().split('T')[0],
+        rates: convertRatesFromUSD(baseCurrency),
+        success: true,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+    }
   }
 };
 
@@ -322,7 +338,33 @@ const convertRatesFromUSD = (baseCurrency: string): { [key: string]: number } =>
 };
 
 /**
- * Convert an amount from one currency to another
+ * Get exchange rate between two currencies using our API route
+ */
+export const getExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
+  try {
+    const response = await axios.get(API_BASE_URL, {
+      params: {
+        from: fromCurrency,
+        to: toCurrency
+      }
+    });
+    return response.data.conversion_rate;
+  } catch (error) {
+    console.error('Error fetching exchange rate:', error);
+    // Fallback to static rates if API fails
+    if (fromCurrency === 'USD') {
+      return FALLBACK_RATES[toCurrency];
+    } else if (toCurrency === 'USD') {
+      return 1 / FALLBACK_RATES[fromCurrency];
+    } else {
+      // Convert through USD
+      return FALLBACK_RATES[toCurrency] / FALLBACK_RATES[fromCurrency];
+    }
+  }
+};
+
+/**
+ * Convert an amount from one currency to another using our API route
  */
 export const convertCurrency = async (
   amount: number,
@@ -330,14 +372,17 @@ export const convertCurrency = async (
   toCurrency: string
 ): Promise<number> => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/convert?from=${fromCurrency}&to=${toCurrency}&amount=${amount}`
-    );
-    return response.data.result;
+    const response = await axios.get(API_BASE_URL, {
+      params: {
+        from: fromCurrency,
+        to: toCurrency,
+        amount
+      }
+    });
+    return response.data.conversion_result;
   } catch (error) {
     console.error('Error converting currency:', error);
-    
-    // Use fallback exchange rates when API fails
+    // Use fallback rates if API fails
     if (fromCurrency === 'USD') {
       return amount * FALLBACK_RATES[toCurrency];
     } else if (toCurrency === 'USD') {
@@ -351,7 +396,7 @@ export const convertCurrency = async (
 };
 
 /**
- * Get historical exchange rates for a time period
+ * Get historical exchange rates for a time period using live data
  */
 export const getTimeSeriesRates = async (
   startDate: string,
@@ -360,17 +405,39 @@ export const getTimeSeriesRates = async (
   symbols: string[] = []
 ): Promise<TimeSeriesData> => {
   try {
-    let url = `${API_BASE_URL}/timeseries?start_date=${startDate}&end_date=${endDate}&base=${baseCurrency}`;
+    // Try primary API first
+    const response = await axios.get(
+      `${API_BASE_URL}/timeframe/${startDate}/${endDate}/${baseCurrency}`
+    );
     
-    if (symbols.length > 0) {
-      url += `&symbols=${symbols.join(',')}`;
-    }
-    
-    const response = await axios.get(url);
-    return response.data;
+    return {
+      base: baseCurrency,
+      start_date: startDate,
+      end_date: endDate,
+      rates: response.data.rates,
+      success: true,
+      timeseries: true
+    };
   } catch (error) {
-    console.error('Error fetching time series rates:', error);
-    throw error;
+    console.error('Error fetching time series from primary API, trying backup:', error);
+    
+    try {
+      // Try backup API
+      const backupUrl = new URL('https://api.exchangerate.host/timeseries');
+      backupUrl.searchParams.append('start_date', startDate);
+      backupUrl.searchParams.append('end_date', endDate);
+      backupUrl.searchParams.append('base', baseCurrency);
+      
+      if (symbols.length > 0) {
+        backupUrl.searchParams.append('symbols', symbols.join(','));
+      }
+      
+      const backupResponse = await axios.get(backupUrl.toString());
+      return backupResponse.data;
+    } catch (backupError) {
+      console.error('Error fetching time series from backup API:', backupError);
+      throw backupError;
+    }
   }
 };
 
@@ -419,24 +486,38 @@ export const getCurrencyForCountry = (countryCode: string): string => {
   return COUNTRY_TO_CURRENCY[countryCode] || 'USD';
 };
 
+// Keep the rate cache implementation
+const rateCache: {
+  [key: string]: {
+    rate: number;
+    timestamp: number;
+  };
+} = {};
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Get exchange rate between two currencies
+ * Get cached exchange rate or fetch new one
  */
-export const getExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
-  try {
-    const rates = await getLatestRates(fromCurrency);
-    return rates.rates[toCurrency];
-  } catch (error) {
-    // Use fallback rates
-    if (fromCurrency === 'USD') {
-      return FALLBACK_RATES[toCurrency];
-    } else if (toCurrency === 'USD') {
-      return 1 / FALLBACK_RATES[fromCurrency];
-    } else {
-      // Convert through USD
-      return FALLBACK_RATES[toCurrency] / FALLBACK_RATES[fromCurrency];
-    }
+export const getCachedExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
+  const cacheKey = `${fromCurrency}-${toCurrency}`;
+  const now = Date.now();
+  
+  // Check cache first
+  if (rateCache[cacheKey] && (now - rateCache[cacheKey].timestamp) < CACHE_DURATION) {
+    return rateCache[cacheKey].rate;
   }
+  
+  // Fetch new rate
+  const rate = await getExchangeRate(fromCurrency, toCurrency);
+  
+  // Update cache
+  rateCache[cacheKey] = {
+    rate,
+    timestamp: now
+  };
+  
+  return rate;
 };
 
 // Function to get currency insights from Gemini AI

@@ -1,80 +1,71 @@
-import { NextResponse } from "next/server";
-import { kv } from "@vercel/kv";
-import { FALLBACK_RATES } from "@/lib/currency";
+import { NextResponse } from 'next/server';
+import axios from 'axios';
 
-// Helper function to convert rates from USD to another base currency
-const convertRatesFromUSD = (baseCurrency: string): { [key: string]: number } => {
-  if (baseCurrency === 'USD') {
-    return { ...FALLBACK_RATES };
-  }
-  
-  const rates: { [key: string]: number } = {};
-  const baseRate = FALLBACK_RATES[baseCurrency];
-  
-  if (!baseRate) {
-    return { ...FALLBACK_RATES };
-  }
-  
-  // Convert all rates to be based on the new base currency
-  Object.keys(FALLBACK_RATES).forEach(currency => {
-    rates[currency] = FALLBACK_RATES[currency] / baseRate;
-  });
-  
-  return rates;
-};
-
-// Cache exchange rates for 24 hours
-const CACHE_TTL = 60 * 60 * 24;
-const EXCHANGE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
+const API_BASE_URL = 'https://v6.exchangerate-api.com/v6';
+const API_KEY = process.env.EXCHANGE_RATE_API_KEY || '';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const baseCurrency = searchParams.get("base") || "USD";
-  
+  const from = searchParams.get('from');
+  const to = searchParams.get('to');
+  const amount = searchParams.get('amount');
+
+  if (!from || !to) {
+    return NextResponse.json(
+      { error: 'From and To currencies are required' },
+      { status: 400 }
+    );
+  }
+
   try {
-    // Check cache first
-    const cacheKey = `exchange_rates:${baseCurrency}`;
-    const cachedRates = await kv.get(cacheKey);
-    
-    if (cachedRates) {
-      return NextResponse.json({ 
-        base: baseCurrency, 
-        rates: cachedRates,
-        fromCache: true
+    // Get the conversion rate first
+    const response = await axios.get(
+      `${API_BASE_URL}/${API_KEY}/latest/${from}`
+    );
+
+    if (response.data.result === "success") {
+      const rate = response.data.conversion_rates[to];
+      
+      if (!rate) {
+        throw new Error(`No conversion rate found for ${to}`);
+      }
+
+      return NextResponse.json({
+        conversion_rate: rate,
+        conversion_result: amount ? rate * Number(amount) : rate,
+        base_code: from,
+        target_code: to,
+        time_last_update_utc: response.data.time_last_update_utc
       });
+    } else {
+      throw new Error('API request failed');
     }
-    
-    // Fetch fresh rates if not in cache
-    const apiUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGE_API_KEY}/latest/${baseCurrency}`;
-    const response = await fetch(apiUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Exchange rate API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.result !== "success") {
-      throw new Error(`Failed to fetch exchange rates: ${data.error}`);
-    }
-    
-    // Store in cache
-    await kv.set(cacheKey, data.conversion_rates, { ex: CACHE_TTL });
-    
-    return NextResponse.json({
-      base: baseCurrency,
-      rates: data.conversion_rates,
-      fromCache: false
-    });
-    
   } catch (error) {
-    console.error("Exchange rate API error:", error);
+    console.error('Error fetching from primary API, trying backup:', error);
     
-    // Return fallback rates converted to the requested base currency
-    return NextResponse.json({
-      base: baseCurrency,
-      rates: convertRatesFromUSD(baseCurrency),
-      fallback: true
-    }, { status: 200 });
+    try {
+      // Try backup API
+      const backupUrl = new URL('https://api.exchangerate.host/convert');
+      backupUrl.searchParams.append('from', from);
+      backupUrl.searchParams.append('to', to);
+      if (amount) {
+        backupUrl.searchParams.append('amount', amount);
+      }
+      
+      const backupResponse = await axios.get(backupUrl.toString());
+      return NextResponse.json({
+        conversion_rate: backupResponse.data.result,
+        conversion_result: amount ? backupResponse.data.result * Number(amount) : backupResponse.data.result,
+        base_code: from,
+        target_code: to,
+        time_last_update_utc: new Date().toUTCString()
+      });
+    } catch (backupError) {
+      console.error('Error fetching from backup API:', backupError);
+      return NextResponse.json(
+        { error: 'Failed to fetch exchange rates' },
+        { status: 500 }
+      );
+    }
   }
 } 
