@@ -480,16 +480,12 @@ export default function LocationPage() {
             </CardFooter>
           </Card>
           
-          {locationSummary?.primaryResidence && (
-            <Alert variant="default">
+          {locationSummary && (
+            <Alert>
               <Info className="h-4 w-4" />
-              <AlertTitle>Tax Residency Information</AlertTitle>
+              <AlertTitle>Location Summary</AlertTitle>
               <AlertDescription>
                 You're currently spending the most time in {locationSummary.primaryResidence} ({locationSummary.primaryResidenceDays} days this year).
-                Tax residency is typically triggered after 183 days in most countries.
-                <Link href="/dashboard/tax-tracker" className="ml-1 text-blue-500 hover:underline">
-                  View Tax Tracker for more details
-                </Link>
               </AlertDescription>
             </Alert>
           )}

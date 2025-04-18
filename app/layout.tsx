@@ -14,7 +14,7 @@ const fontSans = FontSans({
 
 export const metadata: Metadata = {
   title: "SpendX - Multi-Currency Budgeting for Digital Nomads",
-  description: "Manage global finances with ease. Track expenses across currencies, monitor tax obligations, and make smarter relocation decisions.",
+  description: "Manage global finances with ease. Track expenses across currencies and make smarter relocation decisions.",
 };
 
 export default function RootLayout({

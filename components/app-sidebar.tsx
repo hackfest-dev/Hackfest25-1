@@ -68,11 +68,6 @@ export function AppSidebar() {
       icon: Map,
     },
     {
-      title: "Tax Tracker",
-      href: "/dashboard/tax-tracker",
-      icon: Receipt,
-    },
-    {
       title: "COL Planner",
       href: "/dashboard/col-planner",
       icon: Globe,

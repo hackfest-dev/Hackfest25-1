@@ -512,6 +512,25 @@ export const getVolatileCurrencies = async (baseCurrency: string): Promise<{ cod
     ];
   }
   
+  // Check for cached data first
+  try {
+    const cachedData = localStorage.getItem(`volatile_currencies_${baseCurrency}`);
+    const cachedTimestamp = localStorage.getItem(`volatile_currencies_${baseCurrency}_timestamp`);
+    
+    if (cachedData && cachedTimestamp) {
+      const timestamp = parseInt(cachedTimestamp, 10);
+      const now = Date.now();
+      const cacheAge = now - timestamp;
+      
+      // Use cached data if it's less than 1 hour old
+      if (cacheAge < 3600000) {
+        return JSON.parse(cachedData);
+      }
+    }
+  } catch (error) {
+    console.error("Error accessing localStorage:", error);
+  }
+  
   const prompt = `
     Based on current market data and economic trends, provide the top 3 most volatile currencies against ${baseCurrency} over the last 30 days.
     For each currency, include:
@@ -530,6 +549,9 @@ export const getVolatileCurrencies = async (baseCurrency: string): Promise<{ cod
   `;
   
   try {
+    // Add a delay to prevent rate limiting
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
@@ -559,6 +581,15 @@ export const getVolatileCurrencies = async (baseCurrency: string): Promise<{ cod
     if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
       const jsonText = data.candidates[0].content.parts[0].text.trim();
       const result = JSON.parse(jsonText);
+      
+      // Cache the result
+      try {
+        localStorage.setItem(`volatile_currencies_${baseCurrency}`, JSON.stringify(result));
+        localStorage.setItem(`volatile_currencies_${baseCurrency}_timestamp`, Date.now().toString());
+      } catch (error) {
+        console.error("Error caching volatile currencies:", error);
+      }
+      
       return result;
     } else {
       throw new Error("Unexpected response structure from Gemini API");

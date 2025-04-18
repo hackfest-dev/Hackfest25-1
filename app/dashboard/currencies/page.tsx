@@ -83,20 +83,22 @@ export default function CurrenciesPage() {
       setApiLimitError(false);
       
       try {
-        // Fetch in sequence rather than parallel
+        // Fetch in sequence with longer delays between API calls
         await fetchVolatileCurrencies();
-        // Add a small delay between API calls
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Add a longer delay between API calls (3 seconds)
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
         await fetchBestTravelCurrency();
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
         await fetchCurrencyHealth();
       } catch (error) {
         if (error instanceof Error && error.message.includes('429')) {
           setApiLimitError(true);
+          console.error("API rate limit exceeded. Using fallback data.");
+        } else {
+          console.error("Error loading initial data:", error);
         }
-        console.error("Error loading initial data:", error);
       }
     };
     
