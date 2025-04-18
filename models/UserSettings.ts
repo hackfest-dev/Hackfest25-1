@@ -11,11 +11,6 @@ export interface IUserSettings extends Document {
   residencyLocation: string;
   residencyLocationCode: string;
   residencyStartDate?: Date;
-  notificationSettings: {
-    email: boolean;
-    budget: boolean;
-    tax: boolean;
-  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,11 +26,6 @@ const UserSettingsSchema: Schema = new Schema({
   residencyLocation: { type: String, default: '' },
   residencyLocationCode: { type: String, default: '' },
   residencyStartDate: { type: Date },
-  notificationSettings: {
-    email: { type: Boolean, default: true },
-    budget: { type: Boolean, default: true },
-    tax: { type: Boolean, default: true },
-  },
 }, {
   timestamps: true
 });

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Save, User, Bell, Globe, Shield, Paintbrush, MapPin } from "lucide-react";
+import { Loader2, Save, User, Globe, Shield, Paintbrush, MapPin } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 // Define theme as a specific type to fix linter error
@@ -37,9 +37,6 @@ export default function SettingsPage() {
   const [locationCode, setLocationCode] = useState("");
   const [residencyLocation, setResidencyLocation] = useState("");
   const [residencyLocationCode, setResidencyLocationCode] = useState("");
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [budgetNotifications, setBudgetNotifications] = useState(true);
-  const [taxNotifications, setTaxNotifications] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Initialize form with user settings when loaded
@@ -53,9 +50,6 @@ export default function SettingsPage() {
       setLocationCode(settings.locationCode || "");
       setResidencyLocation(settings.residencyLocation || "");
       setResidencyLocationCode(settings.residencyLocationCode || "");
-      setEmailNotifications(settings.notificationSettings?.email ?? true);
-      setBudgetNotifications(settings.notificationSettings?.budget ?? true);
-      setTaxNotifications(settings.notificationSettings?.tax ?? true);
     }
     
     if (user) {
@@ -131,7 +125,7 @@ export default function SettingsPage() {
     try {
       setIsUpdating(true);
       await updateSettings({
-        theme: theme as "light" | "dark" | "system",
+        theme,
       });
       toast({
         title: "Preferences updated",
@@ -159,38 +153,13 @@ export default function SettingsPage() {
         residencyLocationCode,
       });
       toast({
-        title: "Currency settings updated",
+        title: "Settings updated",
         description: "Your currency and location settings have been saved successfully.",
       });
     } catch (error) {
       toast({
-        title: "Failed to update currency settings",
-        description: "There was an error updating your currency settings. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleSaveNotifications = async () => {
-    try {
-      setIsUpdating(true);
-      await updateSettings({
-        notificationSettings: {
-          email: emailNotifications,
-          budget: budgetNotifications,
-          tax: taxNotifications,
-        },
-      });
-      toast({
-        title: "Notification settings updated",
-        description: "Your notification settings have been saved successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to update notification settings",
-        description: "There was an error updating your notification settings. Please try again.",
+        title: "Failed to update settings",
+        description: "There was an error updating your settings. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -211,7 +180,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -223,10 +192,6 @@ export default function SettingsPage() {
           <TabsTrigger value="currency" className="flex items-center gap-2">
             <Globe className="h-4 w-4" />
             <span className="hidden sm:inline">Currency & Location</span>
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            <span className="hidden sm:inline">Notifications</span>
           </TabsTrigger>
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
@@ -240,40 +205,50 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Profile Settings</CardTitle>
               <CardDescription>
-                Update your profile information and how others see you in the app
+                Update your profile information and avatar
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="flex flex-col items-center gap-2">
-                  <Avatar className="h-24 w-24">
-                    <AvatarImage src={avatar || `https://ui-avatars.com/api/?name=${displayName}`} />
-                    <AvatarFallback>{displayName?.substring(0, 2) || user?.email?.substring(0, 2) || "U"}</AvatarFallback>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={avatar || user?.photoURL || `https://ui-avatars.com/api/?name=${displayName}`} alt={displayName} />
+                    <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" size="sm">
-                    Change Avatar
-                  </Button>
+                  <div className="space-y-1">
+                    <Label htmlFor="avatar">Avatar URL</Label>
+                    <Input
+                      id="avatar"
+                      value={avatar}
+                      onChange={(e) => setAvatar(e.target.value)}
+                      placeholder="Enter avatar URL"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-4 flex-1">
+                
+                <Separator />
+                
+                <div className="grid gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="displayName">Display Name</Label>
                     <Input
                       id="displayName"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Your name"
+                      placeholder="Enter your display name"
                     />
                   </div>
+                  
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
                       value={email}
                       disabled
-                      placeholder="Your email"
+                      placeholder="Your email address"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Your email is managed via your authentication provider and cannot be changed here.
+                      Email cannot be changed
                     </p>
                   </div>
                 </div>
@@ -303,25 +278,24 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Preferences</CardTitle>
               <CardDescription>
-                Customize your app experience and appearance
+                Customize your app experience
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-2">
-                <Label htmlFor="theme">Theme</Label>
-                <Select
-                  value={theme}
-                  onValueChange={handleThemeChange}
-                >
-                  <SelectTrigger id="theme">
-                    <SelectValue placeholder="Select a theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="theme">Theme</Label>
+                  <Select value={theme} onValueChange={handleThemeChange}>
+                    <SelectTrigger id="theme">
+                      <SelectValue placeholder="Select a theme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
             <CardFooter>
@@ -348,101 +322,100 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Currency & Location</CardTitle>
               <CardDescription>
-                Set your base currency and current location for accurate financial tracking
+                Set your base currency and location preferences
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-2">
-                <Label htmlFor="baseCurrency">Base Currency</Label>
-                <Select
-                  value={baseCurrency}
-                  onValueChange={setBaseCurrency}
-                >
-                  <SelectTrigger id="baseCurrency">
-                    <SelectValue placeholder="Select your base currency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((currency: Currency) => (
-                      <SelectItem key={currency.code} value={currency.code}>
-                        {currency.flag && <span className="mr-2">{currency.flag}</span>}
-                        {currency.code} - {currency.name} ({currency.symbol})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  This is the currency all your transactions will be converted to for reporting.
-                </p>
-              </div>
-              
-              <Separator />
-              
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Current Location</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={setLocationFromGPS} 
-                    disabled={gpsLoading}
-                    className="flex items-center gap-2"
-                  >
-                    {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                    <span>Use GPS Location</span>
-                  </Button>
+                <div className="grid gap-2">
+                  <Label htmlFor="baseCurrency">Base Currency</Label>
+                  <Select value={baseCurrency} onValueChange={setBaseCurrency}>
+                    <SelectTrigger id="baseCurrency">
+                      <SelectValue placeholder="Select a currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((currency) => (
+                        <SelectItem key={currency.code} value={currency.code}>
+                          {currency.code} - {currency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Current Location</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Your current physical location
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={setLocationFromGPS}
+                      disabled={gpsLoading}
+                      className="flex items-center gap-2"
+                    >
+                      {gpsLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      Detect Location
+                    </Button>
+                  </div>
+                  
                   <div className="grid gap-2">
                     <Label htmlFor="location">Location</Label>
                     <Input
                       id="location"
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      placeholder="e.g., Bangkok, Thailand"
+                      placeholder="e.g., New York, USA"
                     />
                   </div>
+                  
                   <div className="grid gap-2">
                     <Label htmlFor="locationCode">Country Code</Label>
                     <Input
                       id="locationCode"
                       value={locationCode}
                       onChange={(e) => setLocationCode(e.target.value)}
-                      placeholder="e.g., TH"
+                      placeholder="e.g., US"
                       maxLength={2}
+                      disabled={!!location}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      This is automatically set when you select a location.
+                    </p>
                   </div>
                 </div>
-              </div>
-              
-              <Separator />
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Tax Residency</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="residencyLocation">Tax Residency</Label>
-                    <Select
-                      value={residencyLocation}
-                      onValueChange={(value) => {
-                        setResidencyLocation(value);
-                        const country = COUNTRIES.find(c => c.name === value);
-                        if (country) {
-                          setResidencyLocationCode(country.code);
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="residencyLocation">
-                        <SelectValue placeholder="Select your tax residency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COUNTRIES.map((country) => (
-                          <SelectItem key={country.code} value={country.name}>
-                            {country.name} ({country.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Tax Residency</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Your primary tax residence
+                      </p>
+                    </div>
                   </div>
+                  
+                  <div className="grid gap-2">
+                    <Label htmlFor="residencyLocation">Location</Label>
+                    <Input
+                      id="residencyLocation"
+                      value={residencyLocation}
+                      onChange={(e) => setResidencyLocation(e.target.value)}
+                      placeholder="e.g., New York, USA"
+                    />
+                  </div>
+                  
                   <div className="grid gap-2">
                     <Label htmlFor="residencyLocationCode">Country Code</Label>
                     <Input
@@ -478,121 +451,26 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Notifications Settings */}
-        <TabsContent value="notifications">
-          <Card>
-            <CardHeader>
-              <CardTitle>Notification Settings</CardTitle>
-              <CardDescription>
-                Configure how and when you want to receive notifications
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="emailNotifications">Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive important updates via email
-                    </p>
-                  </div>
-                  <Switch
-                    id="emailNotifications"
-                    checked={emailNotifications}
-                    onCheckedChange={setEmailNotifications}
-                  />
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="budgetNotifications">Budget Alerts</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when you're approaching your budget limits
-                    </p>
-                  </div>
-                  <Switch
-                    id="budgetNotifications"
-                    checked={budgetNotifications}
-                    onCheckedChange={setBudgetNotifications}
-                  />
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="taxNotifications">Tax Reminders</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive notifications about tax deadlines and obligations
-                    </p>
-                  </div>
-                  <Switch
-                    id="taxNotifications"
-                    checked={taxNotifications}
-                    onCheckedChange={setTaxNotifications}
-                  />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleSaveNotifications} disabled={isUpdating}>
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
         {/* Security Settings */}
         <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle>Security Settings</CardTitle>
+              <CardTitle>Security</CardTitle>
               <CardDescription>
-                Manage your account security and authentication options
+                Manage your account security settings
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent>
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Password</h3>
-                <p className="text-sm text-muted-foreground">
-                  Password management is handled through your authentication provider.
-                </p>
-                <Button variant="outline">
-                  Reset Password
-                </Button>
-              </div>
-              
-              <Separator />
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Authentication</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your account is currently authenticated via Firebase.
-                </p>
-              </div>
-              
-              <Separator />
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Account Deletion</h3>
-                <p className="text-sm text-muted-foreground">
-                  Permanently delete your account and all associated data.
-                </p>
-                <Button variant="destructive">
-                  Delete Account
-                </Button>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Two-Factor Authentication</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Add an extra layer of security to your account
+                    </p>
+                  </div>
+                  <Button variant="outline">Enable</Button>
+                </div>
               </div>
             </CardContent>
           </Card>
