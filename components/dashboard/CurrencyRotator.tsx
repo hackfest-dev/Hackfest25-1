@@ -11,19 +11,20 @@ interface CurrencyInfo {
   color?: string;
 }
 
-const currencyMap: Record<CountryCode, CurrencyInfo> = {
-  US: { symbol: "$", name: "USD", rotation: 0, color: "#2563eb" },
-  CA: { symbol: "C$", name: "CAD", rotation: 5, color: "#dc2626" },
-  GB: { symbol: "£", name: "GBP", rotation: -5, color: "#4f46e5" },
-  EU: { symbol: "€", name: "EUR", rotation: 10, color: "#0891b2" },
-  JP: { symbol: "¥", name: "JPY", rotation: -10, color: "#db2777" },
-  CN: { symbol: "¥", name: "CNY", rotation: 15, color: "#ea580c" },
-  KR: { symbol: "₩", name: "KRW", rotation: -15, color: "#4338ca" },
-  IN: { symbol: "₹", name: "INR", rotation: 20, color: "#15803d" },
-  AU: { symbol: "A$", name: "AUD", rotation: -20, color: "#9333ea" },
-  RU: { symbol: "₽", name: "RUB", rotation: 25, color: "#7c2d12" },
-  BR: { symbol: "R$", name: "BRL", rotation: -25, color: "#059669" },
-  ZA: { symbol: "R", name: "ZAR", rotation: 30, color: "#ca8a04" }
+// Map of country codes to currency info
+const currencyMap: Record<string, CurrencyInfo> = {
+  'US': { symbol: "$", name: "USD", rotation: 0, color: "#2563eb" },
+  'CA': { symbol: "C$", name: "CAD", rotation: 5, color: "#dc2626" },
+  'GB': { symbol: "£", name: "GBP", rotation: -5, color: "#4f46e5" },
+  'EU': { symbol: "€", name: "EUR", rotation: 10, color: "#0891b2" },
+  'JP': { symbol: "¥", name: "JPY", rotation: -10, color: "#db2777" },
+  'CN': { symbol: "¥", name: "CNY", rotation: 15, color: "#ea580c" },
+  'KR': { symbol: "₩", name: "KRW", rotation: -15, color: "#4338ca" },
+  'IN': { symbol: "₹", name: "INR", rotation: 20, color: "#15803d" },
+  'AU': { symbol: "A$", name: "AUD", rotation: -20, color: "#9333ea" },
+  'RU': { symbol: "₽", name: "RUB", rotation: 25, color: "#7c2d12" },
+  'BR': { symbol: "R$", name: "BRL", rotation: -25, color: "#059669" },
+  'ZA': { symbol: "R", name: "ZAR", rotation: 30, color: "#ca8a04" }
 };
 
 const defaultCurrency: CurrencyInfo = { symbol: "$", name: "USD", rotation: 0, color: "#2563eb" };
@@ -39,7 +40,7 @@ export function CurrencyRotator({
   showInfo = true,
   className = ''
 }: CurrencyRotatorProps) {
-  const { location, loading } = useGPSLocation();
+  const { location, loading, error } = useGPSLocation();
   const [currency, setCurrency] = useState<CurrencyInfo>(defaultCurrency);
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
 
@@ -65,11 +66,22 @@ export function CurrencyRotator({
   useEffect(() => {
     const detectLocation = async () => {
       try {
-        if (location && currencyMap[location.country as CountryCode]) {
-          setCurrency(currencyMap[location.country as CountryCode]);
+        if (location) {
+          console.log('Location detected:', location); // Debug log
+          const countryCode = location.country_code.toUpperCase();
+          console.log('Country code:', countryCode); // Debug log
+          
+          if (currencyMap[countryCode]) {
+            console.log('Setting currency for:', countryCode); // Debug log
+            setCurrency(currencyMap[countryCode]);
+          } else {
+            console.log('No currency mapping for:', countryCode); // Debug log
+            setCurrency(defaultCurrency);
+          }
         }
       } catch (error) {
         console.error("Error detecting location:", error);
+        setCurrency(defaultCurrency);
       }
     };
 
@@ -117,7 +129,7 @@ export function CurrencyRotator({
       </motion.div>
 
       {/* Currency Information */}
-      {showInfo && (
+      {showInfo && location && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

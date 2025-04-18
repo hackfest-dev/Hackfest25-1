@@ -182,12 +182,12 @@ export default function LandingPage() {
           </div>
           
           {/* Currency Rotator Background */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-10 scale-150 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center opacity-30 scale-125 pointer-events-none z-0">
             <CurrencyRotator size="lg" showInfo={false} />
           </div>
 
           {/* Hero Content */}
-          <div className="container px-4 relative">
+          <div className="container px-4 relative z-10">
             <motion.div 
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -453,7 +453,7 @@ export default function LandingPage() {
                   <span className="font-medium text-slate-900">SpendX</span>
                 </Link>
               <Separator orientation="vertical" className="h-4 mx-2 bg-slate-200" />
-                <span className="text-sm text-slate-500">© 2024 SpendX. All rights reserved.</span>
+                <span className="text-sm text-slate-500">© 2025 SpendX. All rights reserved.</span>
             </div>
             <nav className="flex gap-6">
                 {['Terms', 'Privacy', 'Contact'].map((item) => (
