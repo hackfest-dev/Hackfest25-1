@@ -537,13 +537,35 @@ export default function DashboardPage() {
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
           
-          {/* Add Transaction Button */}
+          {/* Add Income Button */}
+          <TransactionDialog 
+            buttonProps={{ 
+              variant: "outline",
+              className: "gap-1 shadow-sm text-green-600 hover:text-green-700 hover:bg-green-50"
+            }}
+            defaultValues={{
+              amount: 0,
+              type: 'income'
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add Income
+          </TransactionDialog>
+          
+          {/* Add Expense Button */}
           <TransactionDialog 
             buttonProps={{ 
               variant: "default",
-              className: "gap-1 shadow-sm"
-            }} 
-          />
+              className: "gap-1 shadow-sm bg-red-600 hover:bg-red-700"
+            }}
+            defaultValues={{
+              amount: 0,
+              type: 'expense'
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </TransactionDialog>
         </div>
       </div>
 

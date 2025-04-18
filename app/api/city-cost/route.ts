@@ -32,7 +32,25 @@ export async function GET(request: Request) {
       );
     }
 
-    const response = await axios.get(`https://www.numbeo.com/api/city_cost?api_key=${apiKey}&city=${city}&country=${country}`);
+    interface NumbeoResponse {
+      monthlyRent: number;
+      utilities: number;
+      internet: number;
+      groceries: number;
+      restaurants: number;
+      publicTransport: number;
+      taxi: number;
+      fitness: number;
+      entertainment: number;
+      doctor: number;
+      dentist: number;
+      safety: number;
+      healthcare: number;
+      climate: number;
+      pollution: number;
+    }
+
+    const response = await axios.get<NumbeoResponse>(`https://www.numbeo.com/api/city_cost?api_key=${apiKey}&city=${city}&country=${country}`);
     
     // Process and structure the data
     const costData = {
