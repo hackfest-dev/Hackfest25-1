@@ -5,7 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { CalendarIcon, Loader2, MapPin } from "lucide-react";
-import * as dateFns from "date-fns";
+import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,15 +46,6 @@ function parseLocation(location: string | undefined) {
   };
 }
 
-// Update the location interface
-interface LocationData {
-  country: string;
-  country_code: string;
-  city?: string;
-  latitude?: number;
-  longitude?: number;
-}
-
 // Form schema
 const transactionFormSchema = z.object({
   amount: z.coerce.number().refine(value => value !== 0, {
@@ -69,9 +60,7 @@ const transactionFormSchema = z.object({
   location: z.object({
     country: z.string().min(1, "Country is required"),
     country_code: z.string().min(1, "Country code is required"),
-    city: z.string().optional(),
-    latitude: z.number().optional(),
-    longitude: z.number().optional()
+    city: z.string().optional()
   }),
   notes: z.string().optional(),
 });
@@ -355,7 +344,7 @@ export function TransactionForm({ transaction, onSuccess, onCancel, defaultValue
                         )}
                       >
                         {field.value ? (
-                          dateFns.format(field.value, "PPP")
+                          format(field.value, "PPP")
                         ) : (
                           <span>Pick a date</span>
                         )}

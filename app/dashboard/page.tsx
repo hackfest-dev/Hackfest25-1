@@ -342,47 +342,49 @@ export default function DashboardPage() {
     fetchTransactionData();
   };
 
-  // Process transactions for time series chart
-  const createTimeSeriesData = (transactions: Transaction[]) => {
-    // Group transactions by date
-    const groupedByDate: Record<string, { income: number; expense: number }> = {};
+// Process transactions for time series chart
+const createTimeSeriesData = (transactions: Transaction[]) => {
+  // Group transactions by date
+  const groupedByDate: Record<string, { income: number; expenses: number }> = {};
+  
+  // Sort transactions by date first
+  const sortedTransactions = [...transactions].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  
+  // Process each transaction
+  sortedTransactions.forEach(transaction => {
+    // Format the date consistently
+    const date = new Date(transaction.date).toISOString().split('T')[0];
     
-    // Get the proper date format based on the selected range
-    const formatPattern = dateRange === "7" || dateRange === "30" ? "MMM dd" : "MMM yyyy";
+    // Initialize the date entry if it doesn't exist
+    if (!groupedByDate[date]) {
+      groupedByDate[date] = { income: 0, expenses: 0 };
+    }
     
-    // Process each transaction
-    transactions.forEach(transaction => {
-      // Format the date
-      const date = new Date(transaction.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      
-      // Initialize the date entry if it doesn't exist
-      if (!groupedByDate[date]) {
-        groupedByDate[date] = { income: 0, expense: 0 };
-      }
-      
-      // Convert the transaction amount to the user's base currency
-      let convertedAmount = transaction.amount;
-      if (transaction.currency !== baseCurrency && exchangeRates[transaction.currency]) {
-        convertedAmount = transaction.amount * exchangeRates[transaction.currency];
-      }
-      
-      // Add the amount to the appropriate category based on amount sign
-      if (transaction.amount > 0) {
-        groupedByDate[date].income += convertedAmount;
-      } else {
-        groupedByDate[date].expense += convertedAmount;
-      }
-    });
+    // Convert the transaction amount to the user's base currency
+    let convertedAmount = transaction.convertedAmount || transaction.amount;
     
-    // Convert the grouped data to the format needed for the chart
-    const chartData = Object.entries(groupedByDate).map(([date, values]) => ({
+    // Add the amount to the appropriate category based on amount sign
+    if (convertedAmount > 0) {
+      groupedByDate[date].income += convertedAmount;
+    } else {
+      groupedByDate[date].expenses += convertedAmount;
+    }
+  });
+  
+  // Convert the grouped data to the format needed for the chart
+  const chartData = Object.entries(groupedByDate)
+    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+    .map(([date, values]) => ({
       date,
-      Income: parseFloat(values.income.toFixed(2)),
-      Expenses: parseFloat(values.expense.toFixed(2))
+      income: parseFloat(values.income.toFixed(2)),
+      expenses: Math.abs(parseFloat(values.expenses.toFixed(2))), // Make expenses positive for better visualization
+      total: parseFloat((values.income + values.expenses).toFixed(2))
     }));
-    
-    return chartData;
-  };
+  
+  return chartData;
+};
 
   const fetchUserSettings = async () => {
     if (!user) return;
@@ -508,8 +510,6 @@ export default function DashboardPage() {
             >
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="365">Last year</option>
             </select>
           </div>
 
@@ -538,7 +538,7 @@ export default function DashboardPage() {
           </Button>
           
           {/* Add Income Button */}
-          <TransactionDialog 
+            <TransactionDialog 
             buttonProps={{ 
               variant: "outline",
               className: "gap-1 shadow-sm text-green-600 hover:text-green-700 hover:bg-green-50"
@@ -547,13 +547,15 @@ export default function DashboardPage() {
               amount: 0,
               type: 'income'
             }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Income
-          </TransactionDialog>
-          
-          {/* Add Expense Button */}
-          <TransactionDialog 
+            >
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Add Income</span>
+            </>
+            </TransactionDialog>
+            
+            {/* Add Expense Button */}
+            <TransactionDialog 
             buttonProps={{ 
               variant: "default",
               className: "gap-1 shadow-sm bg-red-600 hover:bg-red-700"
@@ -562,10 +564,12 @@ export default function DashboardPage() {
               amount: 0,
               type: 'expense'
             }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Expense
-          </TransactionDialog>
+            >
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Add Expense</span>
+            </>
+            </TransactionDialog>
         </div>
       </div>
 
