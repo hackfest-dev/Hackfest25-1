@@ -3,7 +3,6 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IUserSettings extends Document {
   userId: string;
   displayName: string;
-  avatar: string;
   baseCurrency: string;
   theme: 'light' | 'dark' | 'system';
   location: string;
@@ -18,7 +17,6 @@ export interface IUserSettings extends Document {
 const UserSettingsSchema: Schema = new Schema({
   userId: { type: String, required: true, unique: true, index: true },
   displayName: { type: String, default: '' },
-  avatar: { type: String, default: '' },
   baseCurrency: { type: String, default: 'USD' },
   theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
   location: { type: String, default: '' },

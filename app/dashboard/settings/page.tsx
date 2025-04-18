@@ -30,7 +30,6 @@ export default function SettingsPage() {
   
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [avatar, setAvatar] = useState("");
   const [baseCurrency, setBaseCurrency] = useState("USD");
   const [theme, setTheme] = useState<Theme>("dark");
   const [location, setLocation] = useState("");
@@ -43,7 +42,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setDisplayName(settings.displayName || "");
-      setAvatar(settings.avatar || "");
       setBaseCurrency(settings.baseCurrency || "USD");
       setTheme((settings.theme as Theme) || "dark");
       setLocation(settings.location || "");
@@ -104,7 +102,6 @@ export default function SettingsPage() {
       setIsUpdating(true);
       await updateSettings({
         displayName,
-        avatar,
       });
       toast({
         title: "Profile updated",
@@ -205,24 +202,21 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Profile Settings</CardTitle>
               <CardDescription>
-                Update your profile information and avatar
+                Update your profile information
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={avatar || user?.photoURL || `https://ui-avatars.com/api/?name=${displayName}`} alt={displayName} />
+                    <AvatarImage src={user?.photoURL || `https://ui-avatars.com/api/?name=${displayName}`} alt={displayName} />
                     <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">
-                    <Label htmlFor="avatar">Avatar URL</Label>
-                    <Input
-                      id="avatar"
-                      value={avatar}
-                      onChange={(e) => setAvatar(e.target.value)}
-                      placeholder="Enter avatar URL"
-                    />
+                    <p className="text-sm font-medium">Profile Picture</p>
+                    <p className="text-xs text-muted-foreground">
+                      Your profile picture is managed by your authentication provider
+                    </p>
                   </div>
                 </div>
                 
