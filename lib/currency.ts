@@ -53,29 +53,20 @@ export interface TimeSeriesData {
 export const FALLBACK_RATES: { [key: string]: number } = {
   USD: 1,
   EUR: 0.92,
-  GBP: 0.77,
-  JPY: 150.25,
-  THB: 35.27,
-  CAD: 1.36,
-  AUD: 1.52,
-  SGD: 1.35,
-  MXN: 17.54,
-  INR: 83.12,
+  GBP: 0.79,
+  JPY: 151.45,
+  CAD: 1.35,
+  AUD: 1.53,
   CNY: 7.23,
-  HKD: 7.82,
-  CHF: 0.89,
-  BRL: 5.15,
-  ZAR: 18.82,
-  VND: 24850,
-  IDR: 15750,
+  INR: 83.12,
+  THB: 35.27,
+  SGD: 1.35,
   MYR: 4.72,
+  IDR: 15750,
   PHP: 57.50,
-  NZD: 1.67,
-  TRY: 32.15,
-  AED: 3.67,
-  COP: 3950,
-  PLN: 3.95,
-  RUB: 91.20,
+  VND: 24850,
+  HKD: 7.82,
+  // Add more currencies as needed
 };
 
 // Currency symbols for formatting
@@ -342,23 +333,45 @@ const convertRatesFromUSD = (baseCurrency: string): { [key: string]: number } =>
  */
 export const getExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
   try {
-    const response = await axios.get(API_BASE_URL, {
-      params: {
-        from: fromCurrency,
-        to: toCurrency
+    // First try the local API endpoint
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3050';
+      const response = await fetch(`${baseUrl}/api/exchange-rates?from=${fromCurrency}&to=${toCurrency}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.rate;
       }
-    });
-    return response.data.conversion_rate;
-  } catch (error) {
-    console.error('Error fetching exchange rate:', error);
-    // Fallback to static rates if API fails
+    } catch (localError) {
+      console.warn('Local exchange rate API failed, falling back to direct conversion:', localError);
+    }
+
+    // If local API fails, use fallback rates with full precision
+    if (fromCurrency === toCurrency) return 1;
+    
     if (fromCurrency === 'USD') {
-      return FALLBACK_RATES[toCurrency];
+      return FALLBACK_RATES[toCurrency] || 1;
     } else if (toCurrency === 'USD') {
-      return 1 / FALLBACK_RATES[fromCurrency];
+      return 1 / (FALLBACK_RATES[fromCurrency] || 1);
     } else {
-      // Convert through USD
-      return FALLBACK_RATES[toCurrency] / FALLBACK_RATES[fromCurrency];
+      // Convert through USD with full precision
+      const fromUSD = FALLBACK_RATES[fromCurrency] || 1;
+      const toUSD = FALLBACK_RATES[toCurrency] || 1;
+      return toUSD / fromUSD;
+    }
+  } catch (error) {
+    console.error('Error getting exchange rate:', error);
+    // Use fallback rates with full precision
+    if (fromCurrency === toCurrency) return 1;
+    
+    if (fromCurrency === 'USD') {
+      return FALLBACK_RATES[toCurrency] || 1;
+    } else if (toCurrency === 'USD') {
+      return 1 / (FALLBACK_RATES[fromCurrency] || 1);
+    } else {
+      // Convert through USD with full precision
+      const fromUSD = FALLBACK_RATES[fromCurrency] || 1;
+      const toUSD = FALLBACK_RATES[toCurrency] || 1;
+      return toUSD / fromUSD;
     }
   }
 };
