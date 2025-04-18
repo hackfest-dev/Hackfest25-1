@@ -173,7 +173,7 @@ export default function BudgetInsightsPage() {
       });
 
       const data = await response.json();
-
+      
       if (!response.ok) {
         throw new Error(data.details || 'Failed to generate AI insights');
       }
@@ -208,7 +208,7 @@ export default function BudgetInsightsPage() {
       };
 
       setAiInsights(insights);
-    } catch (error) {
+          } catch (error) {
       console.error('Error generating AI insights:', error);
       // Fallback to basic insights if AI fails
       setAiInsights({
@@ -272,45 +272,45 @@ export default function BudgetInsightsPage() {
       <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Budget Insights</h2>
-            <p className="text-sm md:text-base text-muted-foreground">
+            <h2 className="text-3xl font-bold tracking-tight">Budget Insights</h2>
+            <p className="text-muted-foreground">
               Detailed analysis of your spending patterns and financial health
             </p>
           </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid grid-cols-2 md:grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="analysis">Analysis</TabsTrigger>
             <TabsTrigger value="insights">AI Insights</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">Financial Health Score</CardTitle>
-                </CardHeader>
-                <CardContent>
+                  <CardTitle>Financial Health Score</CardTitle>
+              </CardHeader>
+              <CardContent>
                   <div className="flex items-center justify-center">
-                    <div className="relative w-full max-w-xs">
-                      <Progress value={financialHealth.score} className="h-4 w-full" />
+                    <div className="relative">
+                      <Progress value={financialHealth.score} className="h-4 w-32" />
                       <div className="absolute inset-0 flex items-center justify-center text-sm font-medium">
                         {Math.round(financialHealth.score)}/100
-                      </div>
+                </div>
                     </div>
-                  </div>
+                    </div>
                   <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-sm">
                       <span>Savings Rate</span>
                       <span>{financialHealth.savingsRate.toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
+                      </div>
+                      <div className="flex justify-between text-sm">
                       <span>Debt-to-Income</span>
                       <span>{financialHealth.debtToIncome.toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
+                      </div>
+                      <div className="flex justify-between text-sm">
                       <span>Emergency Fund</span>
                       <span>{financialHealth.emergencyFundMonths.toFixed(1)} months</span>
                     </div>
@@ -320,7 +320,7 @@ export default function BudgetInsightsPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">Top Spending Categories</CardTitle>
+                  <CardTitle>Top Spending Categories</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -331,8 +331,8 @@ export default function BudgetInsightsPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <Icon className="h-4 w-4" style={{ color: getCategoryColor(stat.category) }} />
-                              <span className="text-sm">{stat.category}</span>
-                            </div>
+                              <span>{stat.category}</span>
+                              </div>
                             <span className="text-sm font-medium">
                               {formatCurrency(stat.amount)}
                             </span>
@@ -351,7 +351,7 @@ export default function BudgetInsightsPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">Spending Distribution</CardTitle>
+                  <CardTitle>Spending Distribution</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -368,26 +368,26 @@ export default function BudgetInsightsPage() {
           </TabsContent>
 
           <TabsContent value="analysis" className="space-y-4">
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">Category Analysis</CardTitle>
+                  <CardTitle>Category Analysis</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {categoryStats.map((stat) => (
                       <div key={stat.category} className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm">{stat.category}</span>
+                          <span>{stat.category}</span>
                           <span className="text-sm text-muted-foreground">
                             {stat.count} transactions
                           </span>
-                        </div>
+                      </div>
                         <div className="flex items-center justify-between text-sm">
                           <span>{formatCurrency(stat.amount)}</span>
                           <span>{stat.percentage.toFixed(1)}% of total</span>
-                        </div>
                       </div>
+                    </div>
                     ))}
                   </div>
                 </CardContent>
@@ -395,12 +395,12 @@ export default function BudgetInsightsPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">Financial Health Analysis</CardTitle>
+                  <CardTitle>Financial Health Analysis</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <h4 className="font-medium text-sm md:text-base">Savings Rate</h4>
+                      <h4 className="font-medium">Savings Rate</h4>
                       <p className="text-sm text-muted-foreground">
                         {financialHealth.savingsRate >= 20 
                           ? "Excellent! You're saving more than the recommended 20%."
@@ -408,9 +408,9 @@ export default function BudgetInsightsPage() {
                           ? "Good progress. Consider increasing your savings rate to 20%."
                           : "Consider increasing your savings rate. Aim for at least 10%."}
                       </p>
-                    </div>
+                      </div>
                     <div>
-                      <h4 className="font-medium text-sm md:text-base">Debt-to-Income Ratio</h4>
+                      <h4 className="font-medium">Debt-to-Income Ratio</h4>
                       <p className="text-sm text-muted-foreground">
                         {financialHealth.debtToIncome <= 30
                           ? "Excellent! Your debt-to-income ratio is healthy."
@@ -418,9 +418,9 @@ export default function BudgetInsightsPage() {
                           ? "Manageable. Consider reducing your debt load."
                           : "High debt-to-income ratio. Focus on debt reduction."}
                       </p>
-                    </div>
+                      </div>
                     <div>
-                      <h4 className="font-medium text-sm md:text-base">Emergency Fund</h4>
+                      <h4 className="font-medium">Emergency Fund</h4>
                       <p className="text-sm text-muted-foreground">
                         {financialHealth.emergencyFundMonths >= 6
                           ? "Great! You have a solid emergency fund."
@@ -436,20 +436,20 @@ export default function BudgetInsightsPage() {
           </TabsContent>
 
           <TabsContent value="insights" className="space-y-4">
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              <Card className="md:col-span-2 lg:col-span-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg md:text-xl">AI-Powered Insights</CardTitle>
+                  <CardTitle>AI-Powered Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {loadingAi ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin" />
-                    </div>
+                      </div>
                   ) : aiInsights ? (
                     <div className="space-y-6">
                       <div>
-                        <h4 className="font-medium text-sm md:text-base">Spending Analysis</h4>
+                        <h4 className="font-medium">Spending Analysis</h4>
                         <p className="text-sm text-muted-foreground mt-2">
                           {aiInsights.spendingPatterns.analysis}
                         </p>
@@ -463,20 +463,20 @@ export default function BudgetInsightsPage() {
                         </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Monthly Trend:</h5>
-                          <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                             {aiInsights.spendingPatterns.monthlyTrend}
-                          </p>
-                        </div>
+                      </p>
+                    </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Feature Recommendation:</h5>
                           <p className="text-sm text-muted-foreground">
                             {aiInsights.spendingPatterns.featureRecommendation}
                           </p>
-                        </div>
-                      </div>
+                                </div>
+                              </div>
                       
                       <div>
-                        <h4 className="font-medium text-sm md:text-base">Savings Opportunities</h4>
+                        <h4 className="font-medium">Savings Opportunities</h4>
                         <p className="text-sm text-muted-foreground mt-2">
                           {aiInsights.savingsOpportunities.analysis}
                         </p>
@@ -487,29 +487,29 @@ export default function BudgetInsightsPage() {
                               <li key={index}>{category}</li>
                             ))}
                           </ul>
-                        </div>
+                    </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Potential Monthly Savings:</h5>
                           <p className="text-sm text-muted-foreground">
                             {aiInsights.savingsOpportunities.potentialSavings}
                           </p>
-                        </div>
+                      </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Feature Recommendation:</h5>
                           <p className="text-sm text-muted-foreground">
                             {aiInsights.savingsOpportunities.featureRecommendation}
                           </p>
-                        </div>
+                      </div>
                       </div>
                       
                       <div>
-                        <h4 className="font-medium text-sm md:text-base">Financial Health Assessment</h4>
+                        <h4 className="font-medium">Financial Health Assessment</h4>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Current Score:</h5>
                           <p className="text-sm text-muted-foreground">
                             {aiInsights.financialHealth.score}
                           </p>
-                        </div>
+                              </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Strengths:</h5>
                           <ul className="text-sm text-muted-foreground list-disc list-inside">
@@ -517,7 +517,7 @@ export default function BudgetInsightsPage() {
                               <li key={index}>{strength}</li>
                             ))}
                           </ul>
-                        </div>
+                                </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Areas for Improvement:</h5>
                           <ul className="text-sm text-muted-foreground list-disc list-inside">
@@ -525,17 +525,17 @@ export default function BudgetInsightsPage() {
                               <li key={index}>{area}</li>
                             ))}
                           </ul>
-                        </div>
+                              </div>
                         <div className="mt-2">
                           <h5 className="text-sm font-medium">Feature Recommendation:</h5>
                           <p className="text-sm text-muted-foreground">
                             {aiInsights.financialHealth.featureRecommendation}
                           </p>
-                        </div>
-                      </div>
+                            </div>
+                          </div>
                       
                       <div>
-                        <h4 className="font-medium text-sm md:text-base">Personalized Recommendations</h4>
+                        <h4 className="font-medium">Personalized Recommendations</h4>
                         <ul className="mt-2 space-y-4">
                           {aiInsights.personalizedRecommendations.map((rec, index) => (
                             <li key={index} className="text-sm text-muted-foreground">
@@ -543,16 +543,16 @@ export default function BudgetInsightsPage() {
                               <div className="mt-1">
                                 <span className="text-xs">Feature to use: </span>
                                 <span className="text-xs font-medium">{rec.feature}</span>
-                              </div>
+                            </div>
                               <div className="mt-1">
                                 <span className="text-xs">Expected impact: </span>
                                 <span className="text-xs">{rec.impact}</span>
-                              </div>
+                            </div>
                             </li>
                           ))}
                         </ul>
-                      </div>
-                    </div>
+                          </div>
+                  </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       Unable to generate insights at this time.
