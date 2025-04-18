@@ -8,7 +8,7 @@ import { useGPSLocation } from "@/hooks/use-gps-location";
 import { COUNTRIES } from "@/lib/countries";
 import { CURRENCIES, Currency } from "@/lib/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Save, User, Globe, Shield, Paintbrush, MapPin } from "lucide-react";
+import { 
+  Loader2, Save, User, Globe, Shield, Paintbrush, MapPin, 
+  Moon, Sun, Monitor, Lock, CreditCard, Home
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 // Define theme as a specific type to fix linter error
@@ -37,6 +40,7 @@ export default function SettingsPage() {
   const [residencyLocation, setResidencyLocation] = useState("");
   const [residencyLocationCode, setResidencyLocationCode] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
 
   // Initialize form with user settings when loaded
   useEffect(() => {
@@ -97,379 +101,364 @@ export default function SettingsPage() {
     );
   }
 
-  const handleSaveProfile = async () => {
-    try {
-      setIsUpdating(true);
-      await updateSettings({
-        displayName,
-      });
-      toast({
-        title: "Profile updated",
-        description: "Your profile information has been saved successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to update profile",
-        description: "There was an error updating your profile. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
+  const handleThemeChange = (value: Theme) => {
+    setTheme(value);
+    if (typeof window !== "undefined") {
+      const root = window.document.documentElement;
+      root.classList.remove("light", "dark");
+      if (value !== "system") {
+        root.classList.add(value);
+      }
     }
   };
 
-  const handleSavePreferences = async () => {
+  const handleSaveSettings = async (section: "profile" | "preferences" | "currency" | "location") => {
+    if (!user) return;
+    setIsUpdating(true);
+
     try {
-      setIsUpdating(true);
-      await updateSettings({
-        theme,
-      });
-      toast({
-        title: "Preferences updated",
-        description: "Your preferences have been saved successfully.",
-      });
+      const updates: Record<string, any> = {};
+      
+      switch (section) {
+        case "profile":
+          updates.displayName = displayName;
+          break;
+        case "preferences":
+          updates.theme = theme;
+          break;
+        case "currency":
+          updates.baseCurrency = baseCurrency;
+          break;
+        case "location":
+          updates.location = location;
+          updates.residencyLocationCode = residencyLocationCode;
+          break;
+      }
+
+      await updateDoc(doc(db, "users", user.uid), updates);
+      toast.success("Settings updated successfully");
     } catch (error) {
-      toast({
-        title: "Failed to update preferences",
-        description: "There was an error updating your preferences. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Error updating settings:", error);
+      toast.error("Failed to update settings");
     } finally {
       setIsUpdating(false);
     }
-  };
-
-  const handleSaveCurrency = async () => {
-    try {
-      setIsUpdating(true);
-      await updateSettings({
-        baseCurrency,
-        location,
-        locationCode,
-        residencyLocation,
-        residencyLocationCode,
-      });
-      toast({
-        title: "Settings updated",
-        description: "Your currency and location settings have been saved successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to update settings",
-        description: "There was an error updating your settings. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  // Handle theme change with explicit typing
-  const handleThemeChange = (value: string) => {
-    setTheme(value as Theme);
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account settings and preferences</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-6xl mx-auto px-4 py-8">
+        <div className="flex flex-col gap-6">
+          {/* Header */}
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage your account preferences and settings
+            </p>
+          </div>
 
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Profile</span>
-          </TabsTrigger>
-          <TabsTrigger value="preferences" className="flex items-center gap-2">
-            <Paintbrush className="h-4 w-4" />
-            <span className="hidden sm:inline">Preferences</span>
-          </TabsTrigger>
-          <TabsTrigger value="currency" className="flex items-center gap-2">
-            <Globe className="h-4 w-4" />
-            <span className="hidden sm:inline">Currency & Location</span>
-          </TabsTrigger>
-          <TabsTrigger value="security" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Security</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Profile Settings */}
-        <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Settings</CardTitle>
-              <CardDescription>
-                Update your profile information
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage src={user?.photoURL || `https://ui-avatars.com/api/?name=${displayName}`} alt={displayName} />
-                    <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Profile Picture</p>
-                    <p className="text-xs text-muted-foreground">
-                      Your profile picture is managed by your authentication provider
-                    </p>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="displayName">Display Name</Label>
-                    <Input
-                      id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Enter your display name"
-                    />
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      value={email}
-                      disabled
-                      placeholder="Your email address"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Email cannot be changed
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleSaveProfile} disabled={isUpdating}>
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+          {/* Main Content */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Navigation Sidebar */}
+            <nav className="md:col-span-3 space-y-1">
+              <Button
+                variant={activeTab === "profile" ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => setActiveTab("profile")}
+              >
+                <User className="h-4 w-4" />
+                Profile
               </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
-        {/* Preferences Settings */}
-        <TabsContent value="preferences">
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferences</CardTitle>
-              <CardDescription>
-                Customize your app experience
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="theme">Theme</Label>
-                  <Select value={theme} onValueChange={handleThemeChange}>
-                    <SelectTrigger id="theme">
-                      <SelectValue placeholder="Select a theme" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleSavePreferences} disabled={isUpdating}>
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+              <Button
+                variant={activeTab === "appearance" ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => setActiveTab("appearance")}
+              >
+                <Paintbrush className="h-4 w-4" />
+                Appearance
               </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
+              <Button
+                variant={activeTab === "currency" ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => setActiveTab("currency")}
+              >
+                <CreditCard className="h-4 w-4" />
+                Currency
+              </Button>
+              <Button
+                variant={activeTab === "location" ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => setActiveTab("location")}
+              >
+                <MapPin className="h-4 w-4" />
+                Location
+              </Button>
+              <Button
+                variant={activeTab === "security" ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => setActiveTab("security")}
+              >
+                <Lock className="h-4 w-4" />
+                Security
+              </Button>
+            </nav>
 
-        {/* Currency & Location Settings */}
-        <TabsContent value="currency">
-          <Card>
-            <CardHeader>
-              <CardTitle>Currency & Location</CardTitle>
-              <CardDescription>
-                Set your base currency and location preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="baseCurrency">Base Currency</Label>
-                  <Select value={baseCurrency} onValueChange={setBaseCurrency}>
-                    <SelectTrigger id="baseCurrency">
-                      <SelectValue placeholder="Select a currency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCIES.map((currency) => (
-                        <SelectItem key={currency.code} value={currency.code}>
-                          {currency.code} - {currency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Current Location</Label>
+            {/* Content Area */}
+            <div className="md:col-span-9">
+              <Card className="border-0 shadow-none">
+                {/* Profile Section */}
+                {activeTab === "profile" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">Profile Information</h2>
                       <p className="text-sm text-muted-foreground">
-                        Your current physical location
+                        Update your personal information and how others see you
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      onClick={setLocationFromGPS}
-                      disabled={gpsLoading}
-                      className="flex items-center gap-2"
+                    
+                    <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                      <Avatar className="h-16 w-16">
+                        <AvatarImage 
+                          src={user?.photoURL || `https://ui-avatars.com/api/?name=${displayName}`} 
+                          alt={displayName} 
+                        />
+                        <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{displayName || email}</p>
+                        <p className="text-sm text-muted-foreground truncate">{email}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="displayName">Display Name</Label>
+                        <Input
+                          id="displayName"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          placeholder="Enter your display name"
+                          className="max-w-md"
+                        />
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => handleSaveSettings("profile")}
+                      disabled={isUpdating}
+                      className="gap-2"
                     >
-                      {gpsLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      Detect Location
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Changes
                     </Button>
                   </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="e.g., New York, USA"
-                    />
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="locationCode">Country Code</Label>
-                    <Input
-                      id="locationCode"
-                      value={locationCode}
-                      onChange={(e) => setLocationCode(e.target.value)}
-                      placeholder="e.g., US"
-                      maxLength={2}
-                      disabled={!!location}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This is automatically set when you select a location.
-                    </p>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Tax Residency</Label>
+                )}
+
+                {/* Appearance Section */}
+                {activeTab === "appearance" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">Appearance</h2>
                       <p className="text-sm text-muted-foreground">
-                        Your primary tax residence
+                        Customize how SpendX looks on your device
                       </p>
                     </div>
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="residencyLocation">Location</Label>
-                    <Input
-                      id="residencyLocation"
-                      value={residencyLocation}
-                      onChange={(e) => setResidencyLocation(e.target.value)}
-                      placeholder="e.g., New York, USA"
-                    />
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="residencyLocationCode">Country Code</Label>
-                    <Input
-                      id="residencyLocationCode"
-                      value={residencyLocationCode}
-                      onChange={(e) => setResidencyLocationCode(e.target.value)}
-                      placeholder="e.g., US"
-                      maxLength={2}
-                      disabled={!!residencyLocation}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This is automatically set when you select a tax residency.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleSaveCurrency} disabled={isUpdating}>
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
 
-        {/* Security Settings */}
-        <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle>Security</CardTitle>
-              <CardDescription>
-                Manage your account security settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Add an extra layer of security to your account
-                    </p>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label>Theme</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Button
+                            variant={theme === "light" ? "secondary" : "outline"}
+                            className="gap-2"
+                            onClick={() => handleThemeChange("light")}
+                          >
+                            <Sun className="h-4 w-4" />
+                            Light
+                          </Button>
+                          <Button
+                            variant={theme === "dark" ? "secondary" : "outline"}
+                            className="gap-2"
+                            onClick={() => handleThemeChange("dark")}
+                          >
+                            <Moon className="h-4 w-4" />
+                            Dark
+                          </Button>
+                          <Button
+                            variant={theme === "system" ? "secondary" : "outline"}
+                            className="gap-2"
+                            onClick={() => handleThemeChange("system")}
+                          >
+                            <Monitor className="h-4 w-4" />
+                            System
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => handleSaveSettings("preferences")}
+                      disabled={isUpdating}
+                      className="gap-2"
+                    >
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Changes
+                    </Button>
                   </div>
-                  <Button variant="outline">Enable</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                )}
+
+                {/* Currency Section */}
+                {activeTab === "currency" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">Currency Settings</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Set your preferred currency for transactions and reports
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="currency">Base Currency</Label>
+                        <Select
+                          value={baseCurrency}
+                          onValueChange={setBaseCurrency}
+                        >
+                          <SelectTrigger className="max-w-md">
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CURRENCIES.map((currency) => (
+                              <SelectItem key={currency.code} value={currency.code}>
+                                <span className="flex items-center gap-2">
+                                  <span>{currency.flag}</span>
+                                  <span>{currency.name} ({currency.code})</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => handleSaveSettings("currency")}
+                      disabled={isUpdating}
+                      className="gap-2"
+                    >
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+
+                {/* Location Section */}
+                {activeTab === "location" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">Location Settings</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Update your current and residency locations
+                      </p>
+                    </div>
+
+                    <div className="grid gap-6">
+                      <div className="grid gap-4">
+                        <Label>Current Location</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
+                            placeholder="Enter your current location"
+                            className="flex-1 max-w-md"
+                          />
+                          <Button
+                            variant="outline"
+                            onClick={setLocationFromGPS}
+                            disabled={gpsLoading}
+                            className="gap-2"
+                          >
+                            {gpsLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MapPin className="h-4 w-4" />
+                            )}
+                            Detect
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4">
+                        <Label>Tax Residency</Label>
+                        <Select
+                          value={residencyLocationCode}
+                          onValueChange={setResidencyLocationCode}
+                        >
+                          <SelectTrigger className="max-w-md">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COUNTRIES.map((country) => (
+                              <SelectItem key={country.code} value={country.code}>
+                                <span className="flex items-center gap-2">
+                                  <span>{country.flag}</span>
+                                  <span>{country.name}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => handleSaveSettings("location")}
+                      disabled={isUpdating}
+                      className="gap-2"
+                    >
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+
+                {/* Security Section */}
+                {activeTab === "security" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">Security Settings</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Manage your account security and authentication
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4">
+                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                        <div className="grid gap-1">
+                          <Label>Two-Factor Authentication</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Add an extra layer of security to your account
+                          </p>
+                        </div>
+                        <Switch />
+                      </div>
+                    </div>
+
+                    <Button 
+                      onClick={() => handleSaveSettings("preferences")}
+                      disabled={isUpdating}
+                      className="gap-2"
+                    >
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 
