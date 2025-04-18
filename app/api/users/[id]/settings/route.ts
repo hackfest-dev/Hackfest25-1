@@ -1,41 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
-import UserSettings from '@/models/UserSettings.js';
-
-// Define a type for the context parameters
-type ContextParams = {
-  params: {
-    id: string;
-  };
-};
+import UserSettings from '@/models/UserSettings';
 
 // GET /api/users/[id]/settings
 export async function GET(
   request: NextRequest,
-  context: ContextParams
+  { params }: { params: { id: string } }
 ) {
   try {
-    await connectToDatabase();
-    
-    // Properly extract the ID from context params
-    const { id: userId } = context.params;
-    
+    const userId = params.id;
+
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
-    
-    // Find the user settings or create default settings if none exist
-    let userSettings = await UserSettings.findOne({ userId });
-    
-    if (!userSettings) {
-      userSettings = await UserSettings.create({ userId });
+
+    await connectToDatabase();
+    const settings = await UserSettings.findOne({ userId });
+
+    if (!settings) {
+      return NextResponse.json({ error: 'Settings not found' }, { status: 404 });
     }
-    
-    return NextResponse.json(userSettings, { status: 200 });
-  } catch (error: any) {
+
+    return NextResponse.json(settings);
+  } catch (error) {
     console.error('Error fetching user settings:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch user settings', details: error.message },
+      { error: 'Failed to fetch user settings' },
       { status: 500 }
     );
   }
@@ -44,18 +34,16 @@ export async function GET(
 // PATCH /api/users/[id]/settings
 export async function PATCH(
   request: NextRequest,
-  context: ContextParams
+  { params }: { params: { id: string } }
 ) {
   try {
-    await connectToDatabase();
-    
-    // Properly extract the ID from context params
-    const { id: userId } = context.params;
+    const userId = params.id;
     
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
+    await connectToDatabase();
     const updates = await request.json();
     
     // Find and update the user settings, create if it doesn't exist
@@ -65,11 +53,11 @@ export async function PATCH(
       { new: true, upsert: true }
     );
     
-    return NextResponse.json(userSettings, { status: 200 });
-  } catch (error: any) {
+    return NextResponse.json(userSettings);
+  } catch (error) {
     console.error('Error updating user settings:', error);
     return NextResponse.json(
-      { error: 'Failed to update user settings', details: error.message },
+      { error: 'Failed to update user settings' },
       { status: 500 }
     );
   }

@@ -1,26 +1,29 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-const API_BASE_URL = 'https://open.er-api.com/v6/latest';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
-  const amount = searchParams.get('amount');
+const API_BASE_URL = 'https://v6.exchangerate-api.com/v6';
+const API_KEY = process.env.EXCHANGE_RATE_API_KEY || '';
 
-  if (!from || !to) {
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const fromCurrency = searchParams.get('from');
+  const toCurrency = searchParams.get('to');
+
+  if (!fromCurrency || !toCurrency) {
     return NextResponse.json(
-      { error: 'From and To currencies are required' },
+      { error: 'Missing from or to currency parameters' },
       { status: 400 }
     );
   }
 
   try {
-    // Get all rates for the base currency
-    const response = await axios.get(`${API_BASE_URL}/${from}`);
+    // Get the conversion rate first
+    const response = await axios.get(
+      `${API_BASE_URL}/${API_KEY}/latest/${from}`
+    );
 
     if (response.data.result === "success") {
-      const rate = response.data.rates[to];
+      const rate = response.data.conversion_rates[to];
       
       if (!rate) {
         throw new Error(`No conversion rate found for ${to}`);
@@ -31,9 +34,7 @@ export async function GET(request: Request) {
         conversion_result: amount ? rate * Number(amount) : rate,
         base_code: from,
         target_code: to,
-        time_last_update_utc: response.data.time_last_update_utc,
-        time_next_update_utc: response.data.time_next_update_utc,
-        provider: response.data.provider
+        time_last_update_utc: response.data.time_last_update_utc
       });
     } else {
       throw new Error('API request failed');
@@ -56,8 +57,7 @@ export async function GET(request: Request) {
         conversion_result: amount ? backupResponse.data.result * Number(amount) : backupResponse.data.result,
         base_code: from,
         target_code: to,
-        time_last_update_utc: new Date().toUTCString(),
-        provider: 'https://exchangerate.host'
+        time_last_update_utc: new Date().toUTCString()
       });
     } catch (backupError) {
       console.error('Error fetching from backup API:', backupError);
