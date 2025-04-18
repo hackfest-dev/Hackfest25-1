@@ -5,7 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { CalendarIcon, Loader2, MapPin } from "lucide-react";
-import format from "date-fns/format";
+import * as dateFns from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,28 @@ import { createLocationObject } from "@/lib/location";
 import { useGPSLocation } from "@/hooks/use-gps-location";
 import { COUNTRIES } from "@/lib/countries";
 
+// Helper function to parse location string
+function parseLocation(location: string | undefined) {
+  if (!location) return { country: "", country_code: "", city: "" };
+  const [city = "", country = ""] = location.split(",").map(s => s.trim());
+  // Find country code from country name
+  const countryData = COUNTRIES.find(c => c.name === country);
+  return {
+    city,
+    country,
+    country_code: countryData?.code || ""
+  };
+}
+
+// Update the location interface
+interface LocationData {
+  country: string;
+  country_code: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 // Form schema
 const transactionFormSchema = z.object({
   amount: z.coerce.number().refine(value => value !== 0, {
@@ -47,7 +69,9 @@ const transactionFormSchema = z.object({
   location: z.object({
     country: z.string().min(1, "Country is required"),
     country_code: z.string().min(1, "Country code is required"),
-    city: z.string().optional()
+    city: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional()
   }),
   notes: z.string().optional(),
 });
@@ -58,9 +82,13 @@ interface TransactionFormProps {
   transaction?: Transaction;
   onSuccess?: () => void;
   onCancel?: () => void;
+  defaultValues?: {
+    amount?: number;
+    type?: 'income' | 'expense';
+  };
 }
 
-export function TransactionForm({ transaction, onSuccess, onCancel }: TransactionFormProps) {
+export function TransactionForm({ transaction, onSuccess, onCancel, defaultValues }: TransactionFormProps) {
   const { user } = useAuth();
   const { settings } = useUserSettings();
   const { createTransaction, updateTransaction } = useTransactions();
@@ -69,22 +97,45 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
   const [currencyChanged, setCurrencyChanged] = useState(false);
   const categories = getAllCategories();
   
+  // Parse location from settings
+  const defaultLocation = settings?.location ? parseLocation(settings.location) : undefined;
+  
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
-      amount: transaction?.amount || 0,
+      amount: transaction?.amount || defaultValues?.amount || 0,
       currency: transaction?.currency || settings?.baseCurrency || "USD",
       description: transaction?.description || "",
       category: transaction?.category || "Other",
       date: transaction?.date ? new Date(transaction.date) : new Date(),
       location: {
-        country: transaction?.location?.country || settings?.location?.country || "",
-        country_code: transaction?.location?.country_code || settings?.location?.country_code || "",
-        city: transaction?.location?.city || ""
+        country: transaction?.location?.country || defaultLocation?.country || "",
+        country_code: transaction?.location?.country_code || defaultLocation?.country_code || "",
+        city: transaction?.location?.city || defaultLocation?.city || ""
       },
       notes: "",
     },
   });
+
+  useEffect(() => {
+    if (defaultValues?.type === 'income' && !transaction) {
+      const amount = form.getValues('amount');
+      form.setValue('amount', Math.abs(amount));
+    } else if (defaultValues?.type === 'expense' && !transaction) {
+      const amount = form.getValues('amount');
+      form.setValue('amount', -Math.abs(amount));
+    }
+  }, [defaultValues?.type, form, transaction]);
+
+  // Watch for currency changes made by user
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "currency") {
+        setCurrencyChanged(true);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // Update form when GPS location changes
   useEffect(() => {
@@ -132,16 +183,6 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
     }
   }, [transaction, settings, form]);
 
-  // Watch for currency changes made by user
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === "currency") {
-        setCurrencyChanged(true);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   async function onSubmit(values: TransactionFormValues) {
     if (!user) return;
     
@@ -165,7 +206,9 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
       const transactionData = {
         ...values,
         userId: user.uid,
-        location: locationData
+        location: locationData,
+        // Ensure amount is positive for income, negative for expense
+        amount: defaultValues?.type === 'income' ? Math.abs(values.amount) : -Math.abs(values.amount)
       };
       
       if (transaction?._id) {
@@ -218,9 +261,6 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
                     className="h-10"
                   />
                 </FormControl>
-                <FormDescription>
-                  Use negative values for expenses, positive for income
-                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -315,7 +355,7 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
                         )}
                       >
                         {field.value ? (
-                          format(field.value, "PPP")
+                          dateFns.format(field.value, "PPP")
                         ) : (
                           <span>Pick a date</span>
                         )}
@@ -444,4 +484,4 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
       </form>
     </Form>
   );
-} 
+}

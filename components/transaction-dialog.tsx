@@ -21,6 +21,10 @@ interface TransactionDialogProps {
   description?: string;
   onSuccess?: () => void;
   buttonProps?: ButtonProps;
+  defaultValues?: {
+    type?: 'income' | 'expense';
+    amount?: number;
+  };
 }
 
 export function TransactionDialog({
@@ -30,6 +34,7 @@ export function TransactionDialog({
   description,
   onSuccess,
   buttonProps,
+  defaultValues
 }: TransactionDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -38,10 +43,13 @@ export function TransactionDialog({
     if (onSuccess) onSuccess();
   };
 
-  const defaultTitle = transaction ? "Edit Transaction" : "Add Transaction";
+  const isIncome = defaultValues?.type === 'income';
+  const defaultTitle = transaction 
+    ? "Edit Transaction" 
+    : `Add ${isIncome ? 'Income' : 'Expense'}`;
   const defaultDescription = transaction
     ? "Update the details of your transaction"
-    : "Record a new transaction in your account";
+    : `Record a new ${isIncome ? 'income' : 'expense'} transaction in your account`;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -49,7 +57,7 @@ export function TransactionDialog({
         {trigger || (
           <Button {...buttonProps}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Transaction
+            {defaultTitle}
           </Button>
         )}
       </DialogTrigger>
@@ -62,8 +70,12 @@ export function TransactionDialog({
           transaction={transaction}
           onSuccess={handleSuccess}
           onCancel={() => setOpen(false)}
+          defaultValues={{
+            amount: defaultValues?.amount || 0,
+            type: defaultValues?.type || 'expense'
+          }}
         />
       </DialogContent>
     </Dialog>
   );
-} 
+}
