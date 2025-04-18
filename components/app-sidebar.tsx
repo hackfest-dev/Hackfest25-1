@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button"
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { settings } = useUserSettings()
   
   const displayName = settings?.displayName || user?.displayName || user?.email?.split("@")[0] || "User"
