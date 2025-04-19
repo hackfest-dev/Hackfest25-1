@@ -75,7 +75,7 @@ export default function DashboardPage() {
   const { settings } = useUserSettings();
   const { 
     transactions, 
-    loading,
+    loading: transactionsLoading,
     error,
     updateFilters,
     stats,
@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
   const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
   const [loadingRates, setLoadingRates] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [previousPeriodStats, setPreviousPeriodStats] = useState({
     income: 0,
     expenses: 0,
@@ -110,12 +111,29 @@ export default function DashboardPage() {
   // Fetch transactions when component mounts
   useEffect(() => {
     if (user) {
-      fetchTransactionData();
-      fetchPreviousPeriodData();
-      fetchUserSettings();
-      fetchExchangeRates();
+      const loadData = async () => {
+        try {
+          await Promise.all([
+            fetchTransactionData(),
+            fetchPreviousPeriodData(),
+            fetchUserSettings(),
+            fetchExchangeRates()
+          ]);
+        } catch (error) {
+          console.error("Error loading dashboard data:", error);
+        }
+      };
+      loadData();
     }
   }, [user, dateRange]);
+  
+  // Update time series data when converted transactions change
+  useEffect(() => {
+    if (convertedTransactions.length > 0) {
+      const timeSeries = createTimeSeriesData(convertedTransactions);
+      setTimeSeriesData(timeSeries);
+    }
+  }, [convertedTransactions]);
   
   // Fetch exchange rates and convert transaction amounts
   useEffect(() => {
@@ -193,6 +211,7 @@ export default function DashboardPage() {
     if (!user) return;
     
     try {
+      setLoading(true);
       // Create date range filter
       const startDate = new Date();
       const endDate = new Date();
@@ -233,6 +252,8 @@ export default function DashboardPage() {
       
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
   
