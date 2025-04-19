@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, Brain, CreditCard, Globe, Home, Map, PiggyBank, Receipt, Settings, User, Banknote, LogOut } from "lucide-react"
+import { BarChart3, Brain, CreditCard, Globe, Home, Map, PiggyBank, Receipt, Settings, User, Banknote, LogOut, File } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -59,6 +59,11 @@ export function AppSidebar() {
       title: "Analytics",
       href: "/dashboard/analytics",
       icon: BarChart3,
+    },
+    {
+      title: "Statement",
+      href: "/dashboard/upload-statement",
+      icon: File,
     },
   ]
 
