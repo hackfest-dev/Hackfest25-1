@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Send, MessageSquare, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import ReactMarkdown from "react-markdown"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Message {
   role: "user" | "assistant"
@@ -21,6 +22,7 @@ export function AiChatButton() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -28,7 +30,10 @@ export function AiChatButton() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [messages, isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,84 +77,140 @@ export function AiChatButton() {
   }
 
   return (
-    <>
-      <Button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "fixed bottom-6 right-6 rounded-full w-12 h-12 p-0",
-          isOpen && "hidden"
-        )}
-      >
-        <MessageSquare className="h-6 w-6" />
-      </Button>
+    <AnimatePresence>
+      {!isOpen && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          className="fixed bottom-6 right-6 z-50"
+        >
+          <Button
+            onClick={() => setIsOpen(true)}
+            size="lg"
+            className="rounded-full w-12 h-12 p-0 shadow-lg hover:shadow-xl transition-all duration-200"
+          >
+            <MessageSquare className="h-5 w-5" />
+          </Button>
+        </motion.div>
+      )}
 
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[600px] flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">AI Assistant</CardTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start"
-                )}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-6 right-6 z-50"
+        >
+          <Card className="w-[380px] h-[600px] flex flex-col shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-primary" />
+                <span className="font-medium">SpendAI Assistant</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                className="h-8 w-8 hover:bg-muted rounded-full"
               >
-                <div
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && (
+                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                  <p>How can I help you today?</p>
+                </div>
+              )}
+              
+              {messages.map((message, index) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={index}
                   className={cn(
-                    "max-w-[80%] rounded-lg p-3 prose prose-sm dark:prose-invert",
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                    "flex",
+                    message.role === "user" ? "justify-end" : "justify-start"
                   )}
                 >
-                  {message.role === "user" ? (
-                    message.content
-                  ) : (
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-200" />
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-2xl px-4 py-2 prose prose-sm dark:prose-invert",
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/50"
+                    )}
+                  >
+                    {message.role === "user" ? (
+                      message.content
+                    ) : (
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="text-sm m-0">{children}</p>,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    )}
                   </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </CardContent>
-          <div className="p-4 border-t">
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <Input
-                placeholder="Type your message..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="flex-1"
-                disabled={isLoading}
-              />
-              <Button type="submit" size="icon" disabled={isLoading}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-          </div>
-        </Card>
+                </motion.div>
+              ))}
+              
+              {isLoading && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div className="bg-muted/50 rounded-2xl px-4 py-2">
+                    <div className="flex space-x-1">
+                      <motion.div
+                        animate={{ y: [0, -3, 0] }}
+                        transition={{ repeat: Infinity, duration: 1, delay: 0 }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                      <motion.div
+                        animate={{ y: [0, -3, 0] }}
+                        transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                      <motion.div
+                        animate={{ y: [0, -3, 0] }}
+                        transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              <div ref={messagesEndRef} />
+            </CardContent>
+            
+            <div className="p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <form onSubmit={handleSubmit} className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  placeholder="Message SpendAI assistant..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  className="flex-1 bg-muted/50 border-0 focus-visible:ring-1"
+                  disabled={isLoading}
+                />
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  disabled={isLoading}
+                  className="rounded-full"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
+          </Card>
+        </motion.div>
       )}
-    </>
+    </AnimatePresence>
   )
 } 

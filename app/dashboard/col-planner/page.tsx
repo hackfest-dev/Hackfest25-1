@@ -368,8 +368,8 @@ export default function RelocationPlanner() {
     
     // Wrap these in try-catch to prevent build failures
     try {
-      loadUserPreferences();
-      detectLocation();
+    loadUserPreferences();
+    detectLocation();
     } catch (error) {
       console.error('Error during initialization:', error);
     }
