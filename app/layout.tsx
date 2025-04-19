@@ -27,7 +27,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          "min-h-screen bg-background font-sans antialiased",
+          "min-h-screen w-full bg-background font-sans antialiased",
           fontSans.variable
         )}
       >
@@ -38,7 +38,7 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <main className="flex-1">
+            <main className="flex-1 w-full">
               {children}
             </main>
             <AiChatButton />
