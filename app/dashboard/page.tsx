@@ -24,6 +24,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ArrowDown,
   ArrowUp,
   BarChart3,
@@ -39,6 +52,7 @@ import {
   RefreshCw,
   TrendingUp,
   Receipt,
+  ChevronRight,
 } from "lucide-react";
 
 import { SpendingChart } from "@/components/dashboard/charts";
@@ -526,224 +540,181 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
 
   return (
     <div className="flex flex-col space-y-6 p-4 md:p-6">
-      {/* Dashboard Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Dashboard Header - Simplified and Modern */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">Track your global finances in one place</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground mt-1">Your financial overview</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          {/* Date Range Selector */}
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <select 
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="bg-transparent border-none focus:outline-none text-sm"
-            >
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-            </select>
-          </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Date Range Selector - Enhanced */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Select value={dateRange} onValueChange={setDateRange}>
+                  <SelectTrigger className="w-[140px] h-9">
+                    <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Select range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Select time range</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-          {/* Base Currency Indicator */}
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">Base: {baseCurrency}</span>
-          </div>
+          {/* Base Currency Display - Modern Badge */}
+          <Badge variant="secondary" className="h-9 px-4 flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            {baseCurrency}
+          </Badge>
           
-          {/* Analytics Link */}
-          <Button variant="outline" size="sm" className="gap-2" asChild>
-            <a href="/dashboard/analytics">
-              <BarChart3 className="h-4 w-4" />
-              <span>Analytics</span>
-            </a>
-          </Button>
-          
-          {/* Refresh Button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          
-          {/* Add Income Button */}
-            <TransactionDialog 
-            buttonProps={{ 
-              variant: "outline",
-              className: "gap-1 shadow-sm text-green-600 hover:text-green-700 hover:bg-green-50"
-            }}
-            defaultValues={{
-              amount: 0,
-              type: 'income'
-            }}
-            >
-            <>
-              <Plus className="h-4 w-4" />
-              <span>Add Income</span>
-            </>
-            </TransactionDialog>
+          {/* Action Buttons - Cleaner Layout */}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
             
-            {/* Add Expense Button */}
             <TransactionDialog 
-            buttonProps={{ 
-              variant: "default",
-              className: "gap-1 shadow-sm bg-red-600 hover:bg-red-700"
-            }}
-            defaultValues={{
-              amount: 0,
-              type: 'expense'
-            }}
-            >
-            <>
-              <Plus className="h-4 w-4" />
-              <span>Add Expense</span>
-            </>
-            </TransactionDialog>
+              defaultValues={{ amount: 0, type: 'income' }}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Income
+                </Button>
+              }
+            />
+            
+            <TransactionDialog 
+              defaultValues={{ amount: 0, type: 'expense' }}
+              trigger={
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Expense
+                </Button>
+              }
+            />
+          </div>
         </div>
       </div>
 
-      {/* Financial Overview Cards */}
+      {/* Financial Overview Cards - Modern Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Income Card */}
-        <Card>
+        {/* Income Card - Enhanced */}
+        <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Income
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-green-500" />
+              Income
             </CardTitle>
-            <CardDescription>
-              Last {dateRange} days
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+            <div className="mt-1">
               <div className="text-2xl font-bold">
                 {formatCurrency(totalIncome, baseCurrency)}
               </div>
-              <div className={`flex items-center ${incomeChange.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`flex items-center mt-1 text-sm ${
+                incomeChange.startsWith('+') ? 'text-green-500' : 'text-red-500'
+              }`}>
                 {incomeChange.startsWith('+') ? (
-                  <ArrowUp className="mr-1 h-4 w-4" />
+                  <ArrowUp className="h-4 w-4 mr-1" />
                 ) : (
-                  <ArrowDown className="mr-1 h-4 w-4" />
+                  <ArrowDown className="h-4 w-4 mr-1" />
                 )}
-                <span className="text-xs">
-                  {incomeChange}
-                </span>
+                {incomeChange}
               </div>
             </div>
             <Progress 
               value={totalIncome > 0 ? 100 : 0}
-              className="h-1 mt-2 bg-green-100" 
+              className="h-1 mt-3" 
             />
           </CardContent>
         </Card>
 
-        {/* Expenses Card */}
-        <Card>
+        {/* Expenses Card - Enhanced */}
+        <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Expenses
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-red-500" />
+              Expenses
             </CardTitle>
-            <CardDescription>
-              Last {dateRange} days
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+            <div className="mt-1">
               <div className="text-2xl font-bold">
                 {formatCurrency(totalExpenses, baseCurrency)}
               </div>
-              <div className={`flex items-center ${!expensesChange.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`flex items-center mt-1 text-sm ${
+                !expensesChange.startsWith('+') ? 'text-green-500' : 'text-red-500'
+              }`}>
                 {!expensesChange.startsWith('+') ? (
-                  <ArrowDown className="mr-1 h-4 w-4" />
+                  <ArrowDown className="h-4 w-4 mr-1" />
                 ) : (
-                  <ArrowUp className="mr-1 h-4 w-4" />
+                  <ArrowUp className="h-4 w-4 mr-1" />
                 )}
-                <span className="text-xs">
-                  {expensesChange}
-                </span>
+                {expensesChange}
               </div>
             </div>
             <Progress 
               value={totalExpenses < 0 ? 100 : 0}
-              className="h-1 mt-2 bg-red-100" 
+              className="h-1 mt-3" 
             />
           </CardContent>
         </Card>
 
-        {/* Balance Card */}
-        <Card>
+        {/* Balance Card - Enhanced */}
+        <Card className="relative overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Balance
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              Net Balance
             </CardTitle>
-            <CardDescription>
-              Income minus expenses
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+            <div className="mt-1">
               <div className="text-2xl font-bold">
                 {formatCurrency(balance, baseCurrency)}
               </div>
-              <div className={`flex items-center ${balance > 0 ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`flex items-center mt-1 text-sm ${
+                balance > 0 ? 'text-green-500' : 'text-red-500'
+              }`}>
                 {balance > 0 ? (
-                  <ArrowUp className="mr-1 h-4 w-4" />
+                  <ArrowUp className="h-4 w-4 mr-1" />
                 ) : (
-                  <ArrowDown className="mr-1 h-4 w-4" />
+                  <ArrowDown className="h-4 w-4 mr-1" />
                 )}
-                <span className="text-xs">
-                  {balanceChange}
-                </span>
+                {balanceChange}
               </div>
             </div>
             <Progress 
               value={totalIncome > 0 ? (balance / totalIncome) * 100 : 0}
-              className={`h-1 mt-2 ${balance >= 0 
-                ? 'bg-gradient-to-r from-green-200 to-green-500' 
-                : 'bg-gradient-to-r from-red-200 to-red-500'}`}
+              className="h-1 mt-3" 
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Exchange Rate Information */}
-      {Object.keys(exchangeRates).length > 0 && (
-        <Card className="bg-muted/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Exchange Rates</CardTitle>
-            <CardDescription>
-              {loadingRates ? "Updating rates..." : "Current conversion rates to " + baseCurrency}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {Object.entries(exchangeRates).map(([currency, rate]) => (
-                <div key={currency} className="flex items-center justify-between bg-background p-2 rounded-md border">
-                  <div className="font-medium">{currency}</div>
-                  <div className="text-sm text-muted-foreground whitespace-nowrap ml-2">
-                    1 {currency} = {formatCurrency(rate, baseCurrency)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main Dashboard Content */}
-      <div className="space-y-6">
-        {/* Spending Trends Chart */}
-        <Card>
+      {/* Main Content Grid - Modern Layout */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Spending Trends Chart - Enhanced */}
+        <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Spending Trends</CardTitle>
-            <CardDescription>
-              Your financial activity over time
-            </CardDescription>
+            <CardTitle className="text-lg font-semibold">Spending Trends</CardTitle>
           </CardHeader>
           <CardContent className="h-[350px]">
             {loading || loadingRates ? (
@@ -751,238 +722,109 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
             ) : timeSeriesData.length === 0 ? (
               <div className="h-full w-full flex items-center justify-center">
                 <div className="text-center">
-                  <BarChart3 className="h-8 w-8 text-primary/40 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No transaction data available</p>
-                  <p className="text-xs text-muted-foreground mt-1">Add transactions to see your spending trends</p>
+                  <BarChart3 className="h-8 w-8 text-primary/20 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No data available</p>
                 </div>
               </div>
             ) : (
-              <div className="h-full w-full">
-                {console.log('Rendering SpendingChart with data:', timeSeriesData)}
-                <SpendingChart 
-                  data={timeSeriesData}
-                  baseCurrency={baseCurrency} 
-                />
-              </div>
+              <SpendingChart 
+                data={timeSeriesData}
+                baseCurrency={baseCurrency} 
+              />
             )}
           </CardContent>
         </Card>
 
-        {/* Top Spending Categories */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Spending Categories</CardTitle>
-            <CardDescription>
-              Where your money is going
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="min-h-[350px]">
-            {loading || loadingRates ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Skeleton key={i} className="h-8 w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {Object.entries(mainCategories)
-                  .filter(([category, amount]) => amount > 0 && category !== "Income")
-                  .map(([category, amount]) => {
-                    const CategoryIcon = getCategoryIcon(category);
-                    const percentage = totalExpenses !== 0 
-                        ? (amount / Math.abs(totalExpenses)) * 100
-                        : 0;
-                    
-                    return (
-                      <div key={category} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full" 
-                                 style={{ backgroundColor: "#6E56CF" }}>
-                              <CategoryIcon className="h-4 w-4 text-white" />
-                            </div>
-                            <div className="text-sm font-medium">{category}</div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {formatCurrency(amount, baseCurrency)}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {percentage.toFixed(0)}%
-                            </Badge>
-                          </div>
-                        </div>
-                        <Progress
-                          value={percentage > 100 ? 100 : percentage}
-                          className="h-2"
-                        />
-                      </div>
-                    );
-                  })}
-                
-                {topCategories.length > 0 && topCategories
-                  .filter(cat => 
-                    !Object.keys(mainCategories).includes(cat.category) && 
-                    cat.amount < 0)
-                  .slice(0, 3)
-                  .map(category => {
-                    const CategoryIcon = getCategoryIcon(category.category);
-                    const percentage = Math.abs(category.amount / totalExpenses) * 100;
-                    
-                    return (
-                      <div key={category.category} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full" 
-                                 style={{ backgroundColor: category.color || "#6E56CF" }}>
-                              <CategoryIcon className="h-4 w-4 text-white" />
-                            </div>
-                            <div className="text-sm font-medium">{category.category}</div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {formatCurrency(Math.abs(category.amount), baseCurrency)}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {percentage.toFixed(0)}%
-                            </Badge>
-                          </div>
-                        </div>
-                        <Progress
-                          value={percentage}
-                          className="h-2"
-                        />
-                      </div>
-                    );
-                  })}
-
-                {/* Income Category */}
-                {mainCategories["Income"] > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full" 
-                             style={{ backgroundColor: "#22c55e" }}>
-                          <Receipt className="h-4 w-4 text-white" />
-                        </div>
-                        <div className="text-sm font-medium">Income</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {formatCurrency(mainCategories["Income"], baseCurrency)}
-                        </span>
-                      </div>
-                    </div>
-                    <Progress value={100} className="h-2 bg-green-100" />
-                  </div>
-                )}
-
-                {Object.values(mainCategories).every(val => val === 0) && 
-                  topCategories.length === 0 && (
-                    <div className="flex items-center justify-center h-[250px]">
-                      <div className="text-center">
-                        <PieChart className="h-8 w-8 text-primary/40 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">No expense data available</p>
-                        <p className="text-xs text-muted-foreground mt-1">Add expense transactions to see your spending breakdown</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-4"
-                          asChild
-                        >
-                          <a href="/dashboard/transactions">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Transaction
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Transactions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
-            <CardDescription>
-              Your most recent financial activity
-            </CardDescription>
+        {/* Recent Transactions - Enhanced */}
+        <Card className="md:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold">Recent Transactions</CardTitle>
+              <CardDescription>Your latest financial activity</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="gap-1" asChild>
+              <a href="/dashboard/transactions">
+                View All
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </Button>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[400px]">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[35%]">Description</TableHead>
-                  <TableHead className="w-[20%]">Date</TableHead>
-                  <TableHead className="w-[25%]">Amount</TableHead>
-                  <TableHead className="w-[20%]">Category</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading || loadingRates ? (
-                  Array(5).fill(0).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : convertedTransactions.length === 0 ? (
+            <ScrollArea className="h-[400px] rounded-md border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
-                      <p className="text-muted-foreground">No transactions found</p>
-                      <p className="text-xs text-muted-foreground mt-1">Add your first transaction using the button above</p>
-                    </TableCell>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Category</TableHead>
                   </TableRow>
-                ) : (
-                  convertedTransactions
-                    .slice()
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .slice(0, 10)
-                    .map((transaction) => {
-                    const CategoryIcon = getCategoryIcon(transaction.category);
-
-                    return (
-                      <TableRow key={transaction._id} className="group">
-                        <TableCell>
-                          <div className="font-medium truncate max-w-[200px]">{transaction.description}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {transaction.location?.city && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                <span className="truncate">{transaction.location.city}</span>
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{new Date(transaction.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</TableCell>
-                        <TableCell className={transaction.amount < 0 ? "text-red-500" : "text-green-500"}>
-                          <div className="whitespace-nowrap">
-                            {formatCurrency(transaction.amount, transaction.currency)}
-                          </div>
-                          {transaction.currency !== baseCurrency && transaction.convertedAmount && (
-                            <div className="text-xs text-muted-foreground whitespace-nowrap">
-                              ≈ {formatCurrency(transaction.convertedAmount, baseCurrency)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-shrink-0 h-6 w-6 flex items-center justify-center rounded-full" 
-                                 style={{ backgroundColor: "#6E56CF" }}>
-                              <CategoryIcon className="h-3.5 w-3.5 text-white" />
-                            </div>
-                            <span className="hidden sm:inline text-xs truncate max-w-[80px]">{transaction.category}</span>
-                          </div>
-                        </TableCell>
+                </TableHeader>
+                <TableBody>
+                  {loading || loadingRates ? (
+                    Array(5).fill(0).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                    ))
+                  ) : convertedTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <Receipt className="h-8 w-8 text-muted-foreground/30" />
+                          <p className="text-sm text-muted-foreground">No transactions found</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    convertedTransactions
+                      .slice()
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .slice(0, 10)
+                      .map((transaction) => {
+                        const CategoryIcon = getCategoryIcon(transaction.category);
+                        return (
+                          <TableRow key={transaction._id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <CategoryIcon className="h-4 w-4 text-primary" />
+                                </div>
+                                <div>
+                                  <div className="font-medium">{transaction.description}</div>
+                                  {transaction.location?.city && (
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      {transaction.location.city}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {new Date(transaction.date).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className={transaction.amount < 0 ? "text-red-500" : "text-green-500"}>
+                                {formatCurrency(transaction.amount, transaction.currency)}
+                              </div>
+                              {transaction.currency !== baseCurrency && transaction.convertedAmount && (
+                                <div className="text-xs text-muted-foreground">
+                                  ≈ {formatCurrency(transaction.convertedAmount, baseCurrency)}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {transaction.category}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                  )}
+                </TableBody>
+              </Table>
             </ScrollArea>
           </CardContent>
         </Card>
