@@ -5,6 +5,29 @@ import Transaction from '@/models/Transaction';
 import { getExchangeRate, FALLBACK_RATES, CURRENCY_SYMBOLS, CURRENCIES } from '@/lib/currency';
 import UserSettings from '@/models/UserSettings';
 
+// Define types for user data
+interface UserData {
+  baseCurrency?: string;
+  totalIncome?: number;
+  totalExpenses?: number;
+  savingsRate?: number;
+  totalTransactions?: number;
+  period?: {
+    start: string;
+    end: string;
+  };
+  topCategories?: Array<{
+    category: string;
+    percentage: number;
+    total: number;
+  }>;
+  recurringPayments?: Array<{
+    description: string;
+    amount: number;
+    currency: string;
+  }>;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { messages, userId } = await req.json();
@@ -13,8 +36,50 @@ export async function POST(req: NextRequest) {
       throw new Error('Cloudflare credentials not configured');
     }
 
-    // Get user's transaction data
-    let userData = {};
+    // Get the last user message for RAG search
+    const lastUserMessage = messages
+      .filter((msg: any) => msg.role === 'user')
+      .pop()?.content || '';
+
+    // First, get relevant context from Auto RAG
+    let ragContext = '';
+    try {
+      const ragResponse = await fetch(
+        'https://api.cloudflare.com/client/v4/accounts/b24e2ba64a61f064e0c2e4e02f757593/autorag/rags/airug/ai-search',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer jbm2KCChBVLAlTVJ07WJpWrWO4mGQwsobGdw3S5V',
+          },
+          body: JSON.stringify({
+            query: lastUserMessage,
+            auto_rag: {
+              use_reference: true,
+              include_citations: true,
+              system_prompt: "You are a helpful financial assistant. Use the provided documentation to help users understand how to use the website. If the query is about website usage, prioritize the documentation. For financial analysis, use the real-time data provided."
+            }
+          })
+        }
+      );
+
+      if (ragResponse.ok) {
+        const ragData = await ragResponse.json();
+        console.log('RAG Response:', ragData); // Debug log
+        if (ragData.result && ragData.result.context) {
+          ragContext = ragData.result.context;
+        } else if (ragData.success === false) {
+          console.error('RAG Error:', ragData.errors || ragData.messages);
+        }
+      } else {
+        console.error('RAG HTTP Error:', ragResponse.status, await ragResponse.text());
+      }
+    } catch (error) {
+      console.error('Error fetching RAG context:', error);
+    }
+
+    // Get user data and process transactions
+    let userData: UserData = {};
     if (userId) {
       try {
         // Get user's preferred currency from settings
@@ -133,82 +198,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get the last user message for RAG search
-    const lastUserMessage = messages
-      .filter((msg: any) => msg.role === 'user')
-      .pop()?.content || '';
-
-    // Prepare documents for RAG
-    const documents = [
-      {
-        id: "currency_data",
-        text: JSON.stringify({
-          rates: FALLBACK_RATES,
-          symbols: CURRENCY_SYMBOLS,
-          currencies: CURRENCIES
-        })
-      },
-      {
-        id: "user_data",
-        text: JSON.stringify(userData)
-      }
-    ];
-
-    // First, get relevant context from Auto RAG
-    let ragContext = '';
-    try {
-      const ragResponse = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/autorag/rags/airug/ai-search`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-          },
-          body: JSON.stringify({
-            query: lastUserMessage,
-            documents: documents
-          })
-        }
-      );
-
-      if (ragResponse.ok) {
-        const ragData = await ragResponse.json();
-        if (ragData.result && ragData.result.context) {
-          ragContext = ragData.result.context;
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching RAG context:', error);
-    }
-
-    // Updated system prompt with RAG context
-    const systemPrompt = `You are a concise AI assistant for personal finance. Keep responses brief and directly answer the user's question.
+    // Updated system prompt
+    const systemPrompt = `You are a friendly and helpful AI assistant for personal finance and website usage. Have a conversation with the user while providing accurate guidance.
 
 Key guidelines:
-- Give short, focused answers
-- Only include relevant data
-- Stay on topic
+- Be conversational and encouraging
+- Guide users step by step
+- Ask if they need clarification on any steps
 - Use the user's preferred currency (${userData.baseCurrency || 'USD'})
-- Avoid unnecessary explanations
-- Show exact amounts without rounding
+- Provide relevant tips from the documentation
+- Reference real financial data when relevant
+- Offer to help with related features
 
 ${Object.keys(userData).length > 0 ? `
-Financial Summary (in ${userData.baseCurrency}):
+Financial Context (in ${userData.baseCurrency}):
 - Income: ${userData.totalIncome} ${userData.baseCurrency}
 - Expenses: ${userData.totalExpenses} ${userData.baseCurrency}
 - Savings Rate: ${userData.savingsRate}%
 - Transactions: ${userData.totalTransactions}
-- Period: ${userData.period.start} to ${userData.period.end}
+- Period: ${userData.period?.start} to ${userData.period?.end}
 
 Top Categories:
-${userData.topCategories.map(cat => `- ${cat.category}: ${cat.percentage}% (${cat.total} ${userData.baseCurrency})`).join('\n')}
+${userData.topCategories?.map(cat => `- ${cat.category}: ${cat.percentage}% (${cat.total} ${userData.baseCurrency})`).join('\n')}
 
 Recurring:
-${userData.recurringPayments.map(p => `- ${p.description}: ${p.amount} ${userData.baseCurrency}`).join('\n')}
+${userData.recurringPayments?.map(p => `- ${p.description}: ${p.amount} ${userData.baseCurrency}`).join('\n')}
 ` : ''}
 
-${ragContext ? `\nRelevant Context:\n${ragContext}` : ''}`;
+${ragContext ? `\nRelevant Documentation:\n${ragContext}` : ''}`;
 
     // Format messages for the API
     const formattedMessages = [

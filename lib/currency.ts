@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 // Use our internal API route instead of external API
-const API_BASE_URL = '/api/exchange-rates';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL 
+  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/exchange-rates`
+  : 'http://localhost:3050/api/exchange-rates';
 
 // Base URL for the ExchangeRate API - using a more reliable free API
 const API_KEY = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY || '';

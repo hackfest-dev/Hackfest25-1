@@ -36,7 +36,7 @@ interface CurrencyRotatorProps {
   size?: 'sm' | 'md' | 'lg';
   showInfo?: boolean;
   className?: string;
-  values: string[];
+  values?: string[];
   interval?: number;
 }
 
@@ -44,7 +44,7 @@ export function CurrencyRotator({
   size = 'md',
   showInfo = true,
   className = '',
-  values,
+  values = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'INR', 'AUD', 'RUB', 'BRL', 'ZAR'], // Default currencies
   interval = 3000,
 }: CurrencyRotatorProps) {
   const { location, loading, error } = useGPSLocation();
