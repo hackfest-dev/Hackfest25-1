@@ -75,6 +75,7 @@ import {
   getCurrencySymbol
 } from "@/lib/currency";
 import { Plus } from "lucide-react";
+import { AIAssistant } from "@/components/ai-assistant";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$",
@@ -127,28 +128,27 @@ export default function TransactionsPage() {
     transactions, 
     pagination, 
     loading: transactionsLoading, 
-    fetchTransactions, 
-    deleteTransaction 
-  } = useTransactions();
-  
-  // Base currency from user settings
-  const baseCurrency = settings?.baseCurrency || "USD";
-  
-  // Filters
-  const [filters, setFilters] = useState<TransactionFilters>({
+    fetchTransactions,
+    deleteTransaction,
+    updateFilters,
+    filters
+  } = useTransactions({
     page: 1,
     limit: 20,
     sortBy: "date",
     sortOrder: "desc",
   });
   
+  // Base currency from user settings
+  const baseCurrency = settings?.baseCurrency || "USD";
+  
   // UI state
   const [date, setDate] = useState<DateRange | undefined>();
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [currency, setCurrency] = useState<string>("");
-  const [countryFilter, setCountryFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [currency, setCurrency] = useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -156,6 +156,14 @@ export default function TransactionsPage() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
   const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
   const [loadingRates, setLoadingRates] = useState(false);
+  
+  // Get unique countries from transactions
+  const availableCountries = Array.from(
+    new Set(transactions.filter(t => t.location?.country).map(t => t.location!.country))
+  ).map(countryName => {
+    const country = COUNTRIES.find(c => c.name === countryName);
+    return country || { name: countryName, code: "", flagEmoji: "🏳️" };
+  }).sort((a, b) => a.name.localeCompare(b.name));
   
   // Delete confirmation
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
@@ -250,16 +258,11 @@ export default function TransactionsPage() {
   // Apply date filter
   useEffect(() => {
     if (date?.from) {
-      const newFilters = { ...filters };
-      newFilters.startDate = date.from.toISOString();
-      
-      if (date.to) {
-        newFilters.endDate = date.to.toISOString();
-      } else {
-        delete newFilters.endDate;
-      }
-      
-      setFilters(newFilters);
+      updateFilters({
+        startDate: date.from.toISOString(),
+        endDate: date.to?.toISOString(),
+        page: 1,
+      });
     }
   }, [date]);
   
@@ -314,8 +317,7 @@ export default function TransactionsPage() {
   
   // Handle search
   const handleSearch = () => {
-    setFilters({
-      ...filters,
+    updateFilters({
       search: searchQuery,
       page: 1, // Reset to first page
     });
@@ -324,9 +326,8 @@ export default function TransactionsPage() {
   // Handle category filter
   const handleCategoryFilter = (category: string) => {
     setCategoryFilter(category);
-    setFilters({
-      ...filters,
-      category: category || undefined,
+    updateFilters({
+      category: category === "all" ? undefined : category,
       page: 1, // Reset to first page
     });
   };
@@ -334,9 +335,8 @@ export default function TransactionsPage() {
   // Handle currency filter
   const handleCurrencyFilter = (currency: string) => {
     setCurrency(currency);
-    setFilters({
-      ...filters,
-      currency: currency || undefined,
+    updateFilters({
+      currency: currency === "all" ? undefined : currency,
       page: 1, // Reset to first page
     });
   };
@@ -344,18 +344,16 @@ export default function TransactionsPage() {
   // Handle country filter
   const handleCountryFilter = (country: string) => {
     setCountryFilter(country);
-    setFilters((prev) => ({
-      ...prev,
-      countryName: country || undefined,
+    updateFilters({
+      countryName: country === "all" ? undefined : country,
       page: 1, // Reset to first page
-    }));
+    });
   };
   
   // Handle sort
   const handleSort = (field: string) => {
     const isAsc = filters.sortBy === field && filters.sortOrder === "asc";
-    setFilters({
-      ...filters,
+    updateFilters({
       sortBy: field,
       sortOrder: isAsc ? "desc" : "asc",
     });
@@ -363,8 +361,7 @@ export default function TransactionsPage() {
   
   // Handle pagination
   const handlePageChange = (page: number) => {
-    setFilters({
-      ...filters,
+    updateFilters({
       page,
     });
   };
@@ -390,14 +387,20 @@ export default function TransactionsPage() {
     setDate(undefined);
     setSelectedCategory("");
     setSearchQuery("");
-    setCategoryFilter("");
-    setCurrency("");
-    setCountryFilter("");
-    setFilters({
+    setCategoryFilter("all");
+    setCurrency("all");
+    setCountryFilter("all");
+    updateFilters({
       page: 1,
       limit: 20,
       sortBy: "date",
       sortOrder: "desc",
+      search: undefined,
+      category: undefined,
+      currency: undefined,
+      countryName: undefined,
+      startDate: undefined,
+      endDate: undefined,
     });
   };
   
@@ -427,12 +430,11 @@ export default function TransactionsPage() {
   const filterByCurrentLocation = () => {
     if (!gpsLocation) return;
     
-    setCountryFilter(gpsLocation.country || "");
-    setFilters((prev) => ({
-      ...prev,
+    setCountryFilter(gpsLocation.country || "all");
+    updateFilters({
       countryName: gpsLocation.country || undefined,
       page: 1,
-    }));
+    });
   };
   
   // Check if transaction is in current location
@@ -592,7 +594,7 @@ export default function TransactionsPage() {
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Categories</SelectItem>
+                        <SelectItem value="all">All Categories</SelectItem>
                         {getAllCategories().map((category) => (
                           <SelectItem key={category} value={category}>
                             {category}
@@ -610,7 +612,7 @@ export default function TransactionsPage() {
                         <SelectValue placeholder="All Currencies" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Currencies</SelectItem>
+                        <SelectItem value="all">All Currencies</SelectItem>
                         {Object.keys(CURRENCY_SYMBOLS).map((currency) => (
                           <SelectItem key={currency} value={currency}>
                             {CURRENCY_SYMBOLS[currency]} {currency}
@@ -632,12 +634,18 @@ export default function TransactionsPage() {
                           <SelectValue placeholder="All Countries" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All Countries</SelectItem>
-                          {COUNTRIES.map((country) => (
-                            <SelectItem key={country.code} value={country.name}>
-                              {country.flagEmoji} {country.name}
+                          <SelectItem value="all">All Countries</SelectItem>
+                          {availableCountries.length > 0 ? (
+                            availableCountries.map((country) => (
+                              <SelectItem key={country.name} value={country.name}>
+                                {country.flagEmoji} {country.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              No countries available
                             </SelectItem>
-                          ))}
+                          )}
                         </SelectContent>
                       </Select>
                       
@@ -928,6 +936,9 @@ export default function TransactionsPage() {
           </CardFooter>
         )}
       </Card>
+      
+      {/* AI Assistant */}
+      <AIAssistant />
       
       {/* Delete Confirmation Dialog */}
       <Dialog
