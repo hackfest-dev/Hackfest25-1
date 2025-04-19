@@ -32,10 +32,7 @@ import {
   Info,
   Loader2,
   RefreshCw,
-  Download,
-  FileDown,
-  BarChart,
-  FileText
+  BarChart
 } from "lucide-react";
 import { LocationTransactionList } from "@/components/dashboard/location-transaction-list";
 import { LocationEntryForm } from "@/components/dashboard/location-entry-form";
@@ -77,43 +74,6 @@ const parseDate = (date: string | null): Date | null => {
 const formatDisplayDate = (date: string | null): string => {
   const parsedDate = parseDate(date);
   return parsedDate ? parsedDate.toLocaleDateString() : 'Present';
-};
-
-// Helper function to export data to CSV
-const exportToCSV = (data: any[], filename: string) => {
-  const csvContent = "data:text/csv;charset=utf-8," + 
-    data.map(row => Object.values(row).join(",")).join("\n");
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `${filename}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-// Helper function to generate PDF report
-const generatePDFReport = async (data: any) => {
-  try {
-    const response = await axios.post("/api/reports/location", data, {
-      responseType: "blob"
-    });
-    
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `location-report-${new Date().toISOString().split("T")[0]}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } catch (error) {
-    console.error("Error generating PDF report:", error);
-    toast({
-      variant: "destructive",
-      title: "Error",
-      description: "Failed to generate PDF report. Please try again."
-    });
-  }
 };
 
 export default function LocationPage() {
@@ -272,19 +232,6 @@ export default function LocationPage() {
     });
   };
 
-  // Prepare data for export
-  const prepareExportData = () => {
-    return locationHistory?.map(location => ({
-      city: location.city,
-      country: location.country,
-      countryCode: location.countryCode,
-      entryDate: formatDate(location.entryDate),
-      exitDate: formatDate(location.exitDate),
-      daysSpent: location.daysSpent,
-      status: location.isCurrentLocation ? "Current" : "Past"
-    })) || [];
-  };
-
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 container max-w-7xl mx-auto py-6">
@@ -321,25 +268,18 @@ export default function LocationPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToCSV(prepareExportData(), `location-history-${year}`)}
-                  className="flex items-center gap-1.5"
+                  onClick={() => handleYearChange(year - 1)}
+                  disabled={year <= getYearOptions()[getYearOptions().length - 1]}
                 >
-                  <FileDown className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Export CSV</span>
+                  Previous Year
                 </Button>
-                
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => generatePDFReport({
-                    year,
-                    locationHistory,
-                    locationSummary
-                  })}
-                  className="flex items-center gap-1.5"
+                  onClick={() => handleYearChange(year + 1)}
+                  disabled={year >= new Date().getFullYear()}
                 >
-                  <FileText className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Generate Report</span>
+                  Next Year
                 </Button>
               </div>
               
