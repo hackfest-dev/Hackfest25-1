@@ -28,18 +28,32 @@ const nextConfig = {
     parallelServerCompiles: true,
   },
   webpack: (config, { isServer }) => {
-    // Fixes npm packages that depend on `fs` module
+    // Handle browser-specific modules
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        stream: false,
+        http: false,
+        https: false,
+        zlib: false,
       };
     }
+
+    // Prevent bundling of certain imported packages and instead retrieve these external packages at runtime
+    config.externals = [...(config.externals || []), { canvas: "canvas" }];
+
+    // Optional: Add source maps for better debugging
+    if (!isServer) {
+      config.devtool = 'source-map';
+    }
+
     return config;
   },
-  // Increase build timeout if needed
+  // Increase build timeout and memory limit
   onDemandEntries: {
     maxInactiveAge: 60 * 60 * 1000,
     pagesBufferLength: 5,

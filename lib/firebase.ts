@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { 
   getAuth, 
   createUserWithEmailAndPassword, 
@@ -23,29 +23,39 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase only if config is available
+// Initialize Firebase only if config is available and not already initialized
 let app;
 let auth: Auth;
 
-if (typeof window !== 'undefined' && 
-    firebaseConfig.apiKey && 
-    firebaseConfig.authDomain && 
-    firebaseConfig.projectId) {
+const mockAuth: Auth = {
+  currentUser: null,
+  useDeviceLanguage: () => {},
+  onAuthStateChanged: () => () => {},
+  signInWithEmailAndPassword: async () => ({ user: null }),
+  createUserWithEmailAndPassword: async () => ({ user: null }),
+  signInWithPopup: async () => ({ user: null }),
+  signOut: async () => {},
+} as unknown as Auth;
+
+// Check if we're in browser and Firebase isn't initialized
+if (typeof window !== 'undefined' && !getApps().length) {
   try {
-    console.log("Initializing Firebase with project:", firebaseConfig.projectId);
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    auth.useDeviceLanguage();
+    if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+      console.log("Initializing Firebase with project:", firebaseConfig.projectId);
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      auth.useDeviceLanguage();
+    } else {
+      console.warn("Firebase configuration is incomplete. Using mock implementation.");
+      auth = mockAuth;
+    }
   } catch (error) {
     console.error("Error initializing Firebase:", error);
+    auth = mockAuth;
   }
 } else {
-  console.warn("Firebase configuration is incomplete. Some features may not work.");
-  // Initialize auth with a mock implementation for SSR
-  auth = {
-    currentUser: null,
-    // Add other required properties/methods
-  } as Auth;
+  // We're on the server or Firebase is already initialized
+  auth = mockAuth;
 }
 
 // Create the Google provider instance
