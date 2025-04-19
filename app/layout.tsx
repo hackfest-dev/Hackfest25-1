@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/context/AuthContext";
 import { AiChatButton } from "@/components/ai-chat-button";
+import "@/lib/console-overrides";
 
 const fontSans = FontSans({
   subsets: ["latin"],
