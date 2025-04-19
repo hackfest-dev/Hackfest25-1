@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Loader2 } from "lucide-react";
+import { Loader2, Brain, RefreshCw, Sparkles, Activity, CheckCircle2, AlertCircle, Lightbulb, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ArrowUpRight } from "lucide-react";
 import useTransactions from "@/hooks/use-transactions";
 import { formatCurrency } from "@/lib/currency";
 import { CATEGORIES, getCategoryColor, getCategoryIcon } from "@/lib/transactionCategories";
@@ -48,7 +51,11 @@ interface AIInsights {
     feature: string;
     impact: string;
   }>;
+  lastUpdated?: number; // Timestamp for cache invalidation
 }
+
+// Cache duration in milliseconds (24 hours)
+const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 export default function BudgetInsightsPage() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -73,6 +80,33 @@ export default function BudgetInsightsPage() {
     endDate: endOfMonth.toISOString(),
     includeStats: true
   });
+
+  // Load cached insights on mount
+  useEffect(() => {
+    const loadCachedInsights = () => {
+      try {
+        const cached = localStorage.getItem('aiInsights');
+        if (cached) {
+          const parsedCache = JSON.parse(cached) as AIInsights;
+          
+          // Check if cache is still valid (within 24 hours)
+          if (parsedCache.lastUpdated && 
+              Date.now() - parsedCache.lastUpdated < CACHE_DURATION) {
+            setAiInsights(parsedCache);
+            return true;
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('Error loading cached insights:', error);
+        return false;
+      }
+    };
+
+    if (!aiInsights) {
+      loadCachedInsights();
+    }
+  }, []);
 
   useEffect(() => {
     if (!transactionsLoading && transactions) {
@@ -134,8 +168,21 @@ export default function BudgetInsightsPage() {
     setLoading(false);
   };
 
-  const generateAIInsights = async () => {
+  const generateAIInsights = async (forceRefresh = false) => {
     try {
+      // Check cache first if not forcing refresh
+      if (!forceRefresh) {
+        const cached = localStorage.getItem('aiInsights');
+        if (cached) {
+          const parsedCache = JSON.parse(cached) as AIInsights;
+          if (parsedCache.lastUpdated && 
+              Date.now() - parsedCache.lastUpdated < CACHE_DURATION) {
+            setAiInsights(parsedCache);
+            return;
+          }
+        }
+      }
+
       setLoadingAi(true);
       
       // Prepare data for AI analysis
@@ -178,7 +225,7 @@ export default function BudgetInsightsPage() {
         throw new Error(data.details || 'Failed to generate AI insights');
       }
 
-      // Ensure the response matches our interface
+      // Ensure the response matches our interface and add timestamp
       const insights: AIInsights = {
         spendingPatterns: {
           analysis: data.spendingPatterns?.analysis || "No spending analysis available",
@@ -204,14 +251,18 @@ export default function BudgetInsightsPage() {
               feature: rec.feature || "No feature specified",
               impact: rec.impact || "No impact specified"
             }))
-          : []
+          : [],
+        lastUpdated: Date.now()
       };
 
+      // Cache the insights
+      localStorage.setItem('aiInsights', JSON.stringify(insights));
       setAiInsights(insights);
-          } catch (error) {
+
+    } catch (error) {
       console.error('Error generating AI insights:', error);
       // Fallback to basic insights if AI fails
-      setAiInsights({
+      const fallbackInsights: AIInsights = {
         spendingPatterns: {
           analysis: "Unable to generate AI insights at this time. Please try again later.",
           topCategories: [],
@@ -246,8 +297,12 @@ export default function BudgetInsightsPage() {
             feature: "Budget Planning",
             impact: "Better financial control"
           }
-        ]
-      });
+        ],
+        lastUpdated: Date.now()
+      };
+      
+      localStorage.setItem('aiInsights', JSON.stringify(fallbackInsights));
+      setAiInsights(fallbackInsights);
     } finally {
       setLoadingAi(false);
     }
@@ -255,7 +310,7 @@ export default function BudgetInsightsPage() {
 
   useEffect(() => {
     if (!loading && transactions.length > 0) {
-      generateAIInsights();
+      generateAIInsights(false); // Don't force refresh on initial load
     }
   }, [loading, transactions]);
 
@@ -291,26 +346,26 @@ export default function BudgetInsightsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Financial Health Score</CardTitle>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                   <div className="flex items-center justify-center">
                     <div className="relative">
                       <Progress value={financialHealth.score} className="h-4 w-32" />
                       <div className="absolute inset-0 flex items-center justify-center text-sm font-medium">
                         {Math.round(financialHealth.score)}/100
-                </div>
+                      </div>
                     </div>
-                    </div>
+                  </div>
                   <div className="mt-4 space-y-2">
-                      <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-sm">
                       <span>Savings Rate</span>
                       <span>{financialHealth.savingsRate.toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span>Debt-to-Income</span>
                       <span>{financialHealth.debtToIncome.toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span>Emergency Fund</span>
                       <span>{financialHealth.emergencyFundMonths.toFixed(1)} months</span>
                     </div>
@@ -332,9 +387,9 @@ export default function BudgetInsightsPage() {
                             <div className="flex items-center gap-2">
                               <Icon className="h-4 w-4" style={{ color: getCategoryColor(stat.category) }} />
                               <span>{stat.category}</span>
-                              </div>
+                            </div>
                             <span className="text-sm font-medium">
-                              {formatCurrency(stat.amount)}
+                              {formatCurrency(stat.amount, "USD")}
                             </span>
                           </div>
                           <Progress 
@@ -382,12 +437,12 @@ export default function BudgetInsightsPage() {
                           <span className="text-sm text-muted-foreground">
                             {stat.count} transactions
                           </span>
-                      </div>
+                        </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span>{formatCurrency(stat.amount)}</span>
+                          <span>{formatCurrency(stat.amount, "USD")}</span>
                           <span>{stat.percentage.toFixed(1)}% of total</span>
+                        </div>
                       </div>
-                    </div>
                     ))}
                   </div>
                 </CardContent>
@@ -437,126 +492,228 @@ export default function BudgetInsightsPage() {
 
           <TabsContent value="insights" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Card>
+              {/* Spending Patterns Card */}
+              <Card className="col-span-full lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>AI-Powered Insights</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-5 w-5 text-primary" />
+                      <CardTitle>Spending Patterns Analysis</CardTitle>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={() => generateAIInsights(true)}
+                      disabled={loadingAi}
+                    >
+                      {loadingAi ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <CardDescription>
+                    Detailed analysis of your spending habits and trends
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingAi ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-8 w-8 animate-spin" />
-                      </div>
+                    <div className="flex flex-col items-center justify-center h-64 gap-4">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-muted-foreground">Analyzing your spending patterns...</p>
+                    </div>
                   ) : aiInsights ? (
                     <div className="space-y-6">
-                      <div>
-                        <h4 className="font-medium">Spending Analysis</h4>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          {aiInsights.spendingPatterns.analysis}
-                        </p>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Top Categories:</h5>
-                          <ul className="text-sm text-muted-foreground list-disc list-inside">
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <p className="text-lg">{aiInsights.spendingPatterns.analysis}</p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Top Spending Categories</h4>
+                          <ul className="space-y-2">
                             {aiInsights.spendingPatterns.topCategories.map((category, index) => (
-                              <li key={index}>{category}</li>
+                              <li key={index} className="flex items-center gap-2">
+                                <Badge variant="outline" className="w-full justify-between">
+                                  <span>{category}</span>
+                                  <ArrowUpRight className="h-3 w-3" />
+                                </Badge>
+                              </li>
                             ))}
                           </ul>
                         </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Monthly Trend:</h5>
-                      <p className="text-sm text-muted-foreground">
-                            {aiInsights.spendingPatterns.monthlyTrend}
-                      </p>
-                    </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Feature Recommendation:</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {aiInsights.spendingPatterns.featureRecommendation}
-                          </p>
-                                </div>
-                              </div>
-                      
-                      <div>
-                        <h4 className="font-medium">Savings Opportunities</h4>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          {aiInsights.savingsOpportunities.analysis}
-                        </p>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Target Categories:</h5>
-                          <ul className="text-sm text-muted-foreground list-disc list-inside">
-                            {aiInsights.savingsOpportunities.categories.map((category, index) => (
-                              <li key={index}>{category}</li>
-                            ))}
-                          </ul>
-                    </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Potential Monthly Savings:</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {aiInsights.savingsOpportunities.potentialSavings}
-                          </p>
-                      </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Feature Recommendation:</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {aiInsights.savingsOpportunities.featureRecommendation}
-                          </p>
-                      </div>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-medium">Financial Health Assessment</h4>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Current Score:</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {aiInsights.financialHealth.score}
-                          </p>
-                              </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Strengths:</h5>
-                          <ul className="text-sm text-muted-foreground list-disc list-inside">
-                            {aiInsights.financialHealth.strengths.map((strength, index) => (
-                              <li key={index}>{strength}</li>
-                            ))}
-                          </ul>
-                                </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Areas for Improvement:</h5>
-                          <ul className="text-sm text-muted-foreground list-disc list-inside">
-                            {aiInsights.financialHealth.areasForImprovement.map((area, index) => (
-                              <li key={index}>{area}</li>
-                            ))}
-                          </ul>
-                              </div>
-                        <div className="mt-2">
-                          <h5 className="text-sm font-medium">Feature Recommendation:</h5>
-                          <p className="text-sm text-muted-foreground">
-                            {aiInsights.financialHealth.featureRecommendation}
-                          </p>
-                            </div>
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Monthly Trend</h4>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm">{aiInsights.spendingPatterns.monthlyTrend}</p>
                           </div>
-                      
-                      <div>
-                        <h4 className="font-medium">Personalized Recommendations</h4>
-                        <ul className="mt-2 space-y-4">
-                          {aiInsights.personalizedRecommendations.map((rec, index) => (
-                            <li key={index} className="text-sm text-muted-foreground">
-                              <div className="font-medium">{rec.recommendation}</div>
-                              <div className="mt-1">
-                                <span className="text-xs">Feature to use: </span>
-                                <span className="text-xs font-medium">{rec.feature}</span>
-                            </div>
-                              <div className="mt-1">
-                                <span className="text-xs">Expected impact: </span>
-                                <span className="text-xs">{rec.impact}</span>
-                            </div>
-                            </li>
-                          ))}
-                        </ul>
-                          </div>
-                  </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Unable to generate insights at this time.
-                    </p>
+                    <div className="text-center text-muted-foreground">
+                      No spending analysis available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Savings Opportunities Card */}
+              <Card className="col-span-full lg:col-span-1">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    <CardTitle>Savings Opportunities</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Potential areas to optimize your spending
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingAi ? (
+                    <div className="flex flex-col items-center justify-center h-48 gap-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-muted-foreground">Calculating savings...</p>
+                    </div>
+                  ) : aiInsights ? (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm">{aiInsights.savingsOpportunities.analysis}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium mb-2">Target Categories</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {aiInsights.savingsOpportunities.categories.map((category, index) => (
+                            <Badge key={index} variant="secondary" className="justify-center">
+                              {category}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Potential Monthly Savings:</span>
+                          <Badge variant="outline" className="font-mono">
+                            {aiInsights.savingsOpportunities.potentialSavings}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      No savings opportunities found
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Financial Health Card */}
+              <Card className="col-span-full lg:col-span-2">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-primary" />
+                    <CardTitle>Financial Health Assessment</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Comprehensive evaluation of your financial status
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingAi ? (
+                    <div className="flex flex-col items-center justify-center h-48 gap-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-muted-foreground">Assessing financial health...</p>
+                    </div>
+                  ) : aiInsights ? (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-center">
+                        <div className="relative">
+                          <div className="flex items-center gap-4">
+                            <div className="text-4xl font-bold text-primary">
+                              {aiInsights.financialHealth.score}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Financial Health Score
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Strengths</h4>
+                          <ul className="space-y-2">
+                            {aiInsights.financialHealth.strengths.map((strength, index) => (
+                              <li key={index} className="flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                <span className="text-sm">{strength}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Areas for Improvement</h4>
+                          <ul className="space-y-2">
+                            {aiInsights.financialHealth.areasForImprovement.map((area, index) => (
+                              <li key={index} className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-yellow-500" />
+                                <span className="text-sm">{area}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      No financial health data available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Personalized Recommendations Card */}
+              <Card className="col-span-full lg:col-span-1">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-primary" />
+                    <CardTitle>Smart Recommendations</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Tailored suggestions for your financial goals
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingAi ? (
+                    <div className="flex flex-col items-center justify-center h-48 gap-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-muted-foreground">Generating recommendations...</p>
+                    </div>
+                  ) : aiInsights ? (
+                    <div className="space-y-4">
+                      {aiInsights.personalizedRecommendations.map((rec, index) => (
+                        <div key={index} className="p-3 rounded-lg border">
+                          <div className="flex items-start gap-3">
+                            <div className="rounded-full bg-primary/10 p-1.5 mt-0.5">
+                              <Zap className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">{rec.recommendation}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline" className="text-xs">
+                                  {rec.feature}
+                                </Badge>
+                                <span>•</span>
+                                <span>{rec.impact}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      No recommendations available
+                    </div>
                   )}
                 </CardContent>
               </Card>
