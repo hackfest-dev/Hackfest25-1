@@ -689,8 +689,10 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
               </div>
             </div>
             <Progress 
-              value={50}
-              className={`h-1 mt-2 ${balance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}
+              value={totalIncome > 0 ? (balance / totalIncome) * 100 : 0}
+              className={`h-1 mt-2 ${balance >= 0 
+                ? 'bg-gradient-to-r from-green-200 to-green-500' 
+                : 'bg-gradient-to-r from-red-200 to-red-500'}`}
             />
           </CardContent>
         </Card>

@@ -43,34 +43,35 @@ const SpendingTooltip = ({ active, payload, label, baseCurrency }: TooltipProps<
 };
 
 export const SpendingChart = ({ data, baseCurrency = 'USD' }: { data: any[], baseCurrency?: string }) => {
-  // Format the date labels nicely
   const formattedData = data.map(item => ({
     ...item,
     date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }));
   
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <LineChart data={formattedData} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
         <XAxis 
           dataKey="date" 
           axisLine={false}
           tickLine={false}
           tickMargin={10}
+          fontSize={12}
           tick={{ fill: 'var(--muted-foreground)' }}
         />
         <YAxis 
           axisLine={false}
           tickLine={false}
           tickMargin={10}
+          fontSize={12}
           tick={{ fill: 'var(--muted-foreground)' }}
-          tickFormatter={(value) => `${value > 0 ? '+' : ''}${value}`}
+          tickFormatter={(value) => formatCurrency(value, baseCurrency)}
         />
         <Tooltip content={<SpendingTooltip baseCurrency={baseCurrency} />} />
         <Line
           type="monotone"
-          dataKey="income"
+          dataKey="Income"
           stroke="hsl(var(--green-500))"
           strokeWidth={2}
           dot={false}
@@ -79,23 +80,19 @@ export const SpendingChart = ({ data, baseCurrency = 'USD' }: { data: any[], bas
         />
         <Line
           type="monotone"
-          dataKey="expenses"
+          dataKey="Expenses"
           stroke="hsl(var(--red-500))"
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 6, strokeWidth: 0 }}
           name="Expenses"
         />
-        <Line
-          type="monotone"
-          dataKey="total"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2.5}
-          dot={{ r: 2, strokeWidth: 0, fill: 'hsl(var(--primary))' }}
-          activeDot={{ r: 6, strokeWidth: 0 }}
-          name="Total"
+        <Legend
+          verticalAlign="top"
+          iconType="circle"
+          iconSize={8}
+          height={36}
         />
-        <Legend />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -124,4 +121,4 @@ export const CategoryPieChart = ({ data = [], colors = COLORS }: { data?: any[],
       </PieChart>
     </ResponsiveContainer>
   );
-}; 
+};
