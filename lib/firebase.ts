@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Initialize Firebase only if config is available
 let app;
-let auth;
+let auth: Auth;
 
 if (typeof window !== 'undefined' && 
     firebaseConfig.apiKey && 
@@ -41,18 +41,12 @@ if (typeof window !== 'undefined' &&
   }
 } else {
   console.warn("Firebase configuration is incomplete. Some features may not work.");
+  // Initialize auth with a mock implementation for SSR
+  auth = {
+    currentUser: null,
+    // Add other required properties/methods
+  } as Auth;
 }
-
-// Configure the auth instance
-auth.useDeviceLanguage();
-
-// IMPORTANT: Firebase Auth Emulator is disabled
-// We are NOT connecting to the emulator to ensure proper Google authentication flow
-// DO NOT uncomment the following block unless you specifically need the emulator
-// if (process.env.NODE_ENV === 'development') {
-//   connectAuthEmulator(auth, 'http://localhost:9099');
-//   console.log('Using Firebase Auth Emulator');
-// }
 
 // Create the Google provider instance
 const googleProvider = new GoogleAuthProvider();
