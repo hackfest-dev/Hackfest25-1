@@ -1,6 +1,9 @@
+"use client";
+
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGPSLocation } from '@/hooks/use-gps-location';
+import { cn } from "@/lib/utils";
 
 type CountryCode = 'US' | 'CA' | 'GB' | 'EU' | 'JP' | 'CN' | 'KR' | 'IN' | 'AU' | 'RU' | 'BR' | 'ZA';
 
@@ -33,16 +36,21 @@ interface CurrencyRotatorProps {
   size?: 'sm' | 'md' | 'lg';
   showInfo?: boolean;
   className?: string;
+  values: string[];
+  interval?: number;
 }
 
-export function CurrencyRotator({ 
-  size = 'md', 
+export function CurrencyRotator({
+  size = 'md',
   showInfo = true,
-  className = ''
+  className = '',
+  values,
+  interval = 3000,
 }: CurrencyRotatorProps) {
   const { location, loading, error } = useGPSLocation();
   const [currency, setCurrency] = useState<CurrencyInfo>(defaultCurrency);
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Size configurations
   const sizeClasses = {
@@ -94,11 +102,18 @@ export function CurrencyRotator({
       }));
     }, 50);
 
-    return () => clearInterval(rotationInterval);
-  }, [location]);
+    const timer = setInterval(() => {
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % values.length);
+    }, interval);
+
+    return () => {
+      clearInterval(rotationInterval);
+      clearInterval(timer);
+    };
+  }, [location, values.length, interval]);
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={cn("relative", className)}>
       <motion.div 
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -146,6 +161,21 @@ export function CurrencyRotator({
           )}
         </motion.div>
       )}
+
+      <div className={cn("relative h-6 overflow-hidden", className)}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentIndex}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -20, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            {values[currentIndex]}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 } 

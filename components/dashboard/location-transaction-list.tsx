@@ -11,23 +11,62 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency as formatCurrencyUtil, FALLBACK_RATES, getExchangeRate } from "@/lib/currency";
 import { getCategoryIcon } from "@/lib/transactionCategories";
 import { createLocationObject } from "@/lib/location";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface LocationTransactionListProps {
   limit?: number;
   showFilters?: boolean;
+  transactions: Transaction[];
+  gpsLocation?: { country: string; city?: string } | null;
+  baseCurrency: string;
+  loading?: boolean;
+  error?: boolean;
 }
 
-export function LocationTransactionList({ limit = 10, showFilters = true }: LocationTransactionListProps) {
+interface LocationSummary {
+  expenses: number;
+  income: number;
+  transactions: Transaction[];
+}
+
+interface ConvertedTransaction extends Transaction {
+  convertedAmount?: number;
+}
+
+interface TimeframeOption {
+  label: string;
+  value: number;
+  days: number;
+}
+
+const timeframes: TimeframeOption[] = [
+  { label: "7D", value: 7, days: 7 },
+  { label: "30D", value: 30, days: 30 },
+  { label: "90D", value: 90, days: 90 },
+  { label: "1Y", value: 365, days: 365 },
+];
+
+export function LocationTransactionList({
+  limit = 10,
+  showFilters = true,
+  transactions,
+  gpsLocation,
+  baseCurrency,
+  loading,
+  error
+}: LocationTransactionListProps) {
   const { settings } = useUserSettings();
-  const { location: gpsLocation, loading: gpsLoading } = useGPSLocation();
-  const [timeframe, setTimeframe] = useState<number>(30); // Last 30 days by default
-  const [showOnlyCurrentLocation, setShowOnlyCurrentLocation] = useState(false);
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
-  const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
+  const { location: gpsLocationFromHook, loading: gpsLoading } = useGPSLocation();
+  const [timeframe, setTimeframe] = useState<number>(30);
+  const [locationGroups, setLocationGroups] = useState<{[key: string]: LocationSummary}>({});
+  const [convertedTransactions, setConvertedTransactions] = useState<ConvertedTransaction[]>([]);
   const [loadingRates, setLoadingRates] = useState(false);
-  
+  const [showOnlyCurrentLocation, setShowOnlyCurrentLocation] = useState(false);
+
   // Get the base currency from user settings
-  const baseCurrency = settings?.baseCurrency || "USD";
+  const baseCurrencyFromSettings = settings?.baseCurrency || "USD";
   
   // Calculate date range based on timeframe
   const endDate = new Date();
@@ -35,46 +74,54 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
   startDate.setDate(endDate.getDate() - timeframe);
   
   // Use transactions hook with filters
-  const { transactions, loading, error } = useTransactions({
+  const { transactions: transactionsFromHook, loading: transactionsLoading, error: transactionsError } = useTransactions({
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     limit: limit * 5, // Fetch more to group by location
     sortBy: "date",
     sortOrder: "desc",
     // Filter by location if user has selected to show only current location
-    search: showOnlyCurrentLocation && gpsLocation ? gpsLocation.country : undefined
+    search: showOnlyCurrentLocation && gpsLocationFromHook ? gpsLocationFromHook.country : undefined
   });
   
-  // Group transactions by location
-  const [locationGroups, setLocationGroups] = useState<{[key: string]: Transaction[]}>({});
-  
+  // Filter transactions by timeframe and group by location
   useEffect(() => {
-    const groups: {[key: string]: Transaction[]} = {};
-    
-    if (transactions.length > 0) {
-      transactions.forEach(transaction => {
-        if (!transaction.location?.country) return;
-        
-        // Use country name as the key
-        const locationKey = transaction.location.country || 'unknown';
-        if (!groups[locationKey]) {
-          groups[locationKey] = [];
-        }
-        
-        groups[locationKey].push(transaction);
-      });
-    }
-    
-    // Sort groups by transaction count (most active locations first)
-    const sortedGroups: {[key: string]: Transaction[]} = {};
-    Object.keys(groups)
-      .sort((a, b) => groups[b].length - groups[a].length)
-      .forEach(key => {
-        sortedGroups[key] = groups[key];
-      });
-    
-    setLocationGroups(sortedGroups);
-  }, [transactions]);
+    if (!transactionsFromHook?.length) return;
+
+    const now = new Date();
+    const filteredTransactions = transactionsFromHook.filter(tx => {
+      const txDate = new Date(tx.date);
+      const diffDays = Math.floor((now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays <= timeframe;
+    });
+
+    const groups = filteredTransactions.reduce<{[key: string]: LocationSummary}>((acc, tx) => {
+      if (!tx.location?.country) return acc;
+      
+      const key = tx.location.country;
+      if (!acc[key]) {
+        acc[key] = {
+          expenses: 0,
+          income: 0,
+          transactions: []
+        };
+      }
+      
+      const convertedTx = convertedTransactions.find(ct => ct._id === tx._id);
+      const amount = convertedTx?.convertedAmount || tx.amount;
+      
+      if (amount < 0) {
+        acc[key].expenses += Math.abs(amount);
+      } else {
+        acc[key].income += amount;
+      }
+      
+      acc[key].transactions.push(tx);
+      return acc;
+    }, {});
+
+    setLocationGroups(groups);
+  }, [transactionsFromHook, timeframe, convertedTransactions]);
   
   // Format currency with the right symbol (using the dashboard's logic)
   const formatCurrency = (amount: number, currency: string) => {
@@ -120,18 +167,18 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
   // Fetch exchange rates and convert transaction amounts (using dashboard's approach)
   useEffect(() => {
     const fetchRates = async () => {
-      if (transactions.length === 0) return;
+      if (transactionsFromHook.length === 0) return;
       
       setLoadingRates(true);
       
       try {
         // Get unique currencies from transactions
         const uniqueCurrencies = Array.from(
-          new Set(transactions.map(t => t.currency).filter(c => c !== baseCurrency))
+          new Set(transactionsFromHook.map(t => t.currency).filter(c => c !== baseCurrencyFromSettings))
         );
         
         if (uniqueCurrencies.length === 0) {
-          setConvertedTransactions(transactions);
+          setConvertedTransactions(transactionsFromHook);
           setLoadingRates(false);
           return;
         }
@@ -143,28 +190,25 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
         await Promise.all(
           uniqueCurrencies.map(async (currency) => {
             try {
-              const rate = await getExchangeRate(currency, baseCurrency);
+              const rate = await getExchangeRate(currency, baseCurrencyFromSettings);
               rates[currency] = rate;
             } catch (error) {
               console.error(`Error fetching rate for ${currency}:`, error);
               // Fallback to static rates
-              if (baseCurrency === 'USD') {
+              if (baseCurrencyFromSettings === 'USD') {
                 rates[currency] = 1 / FALLBACK_RATES[currency];
               } else if (currency === 'USD') {
-                rates[currency] = FALLBACK_RATES[baseCurrency];
+                rates[currency] = FALLBACK_RATES[baseCurrencyFromSettings];
               } else {
                 // Convert through USD as intermediary
-                rates[currency] = FALLBACK_RATES[baseCurrency] / FALLBACK_RATES[currency];
+                rates[currency] = FALLBACK_RATES[baseCurrencyFromSettings] / FALLBACK_RATES[currency];
               }
             }
           })
         );
         
-        setExchangeRates(rates);
-        
-        // Convert transactions
-        const converted = transactions.map(transaction => {
-          if (transaction.currency === baseCurrency) {
+        setConvertedTransactions(transactionsFromHook.map(transaction => {
+          if (transaction.currency === baseCurrencyFromSettings) {
             return { ...transaction, convertedAmount: transaction.amount };
           }
           
@@ -173,28 +217,19 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
             ...transaction,
             convertedAmount: transaction.amount * rate
           };
-        });
-        
-        setConvertedTransactions(converted);
+        }));
       } catch (error) {
         console.error("Error fetching exchange rates:", error);
         // Just use original transactions if rates can't be fetched
-        setConvertedTransactions(transactions);
+        setConvertedTransactions(transactionsFromHook);
       } finally {
         setLoadingRates(false);
       }
     };
     
     fetchRates();
-  }, [transactions, baseCurrency]);
+  }, [transactionsFromHook, baseCurrencyFromSettings]);
   
-  const timeframes = [
-    { label: "7d", value: 7 },
-    { label: "30d", value: 30 },
-    { label: "90d", value: 90 },
-    { label: "1y", value: 365 },
-  ];
-
   // Calculate totals using converted amounts
   const calculateTotal = (txs: Transaction[]): number => {
     return txs.reduce((sum, tx) => {
@@ -204,13 +239,22 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
     }, 0);
   };
   
-  // Count transactions that have been converted
-  const getConvertedCount = (txs: Transaction[]): number => {
-    return txs.filter(tx => 
-      tx.convertedAmount !== undefined && tx.currency !== baseCurrency
-    ).length;
-  };
-  
+  if (loading || loadingRates) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center p-8 text-red-500">
+        Error loading transactions. Please try again.
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -218,7 +262,7 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
           <div>
             <CardTitle className="text-lg">Spending by Location</CardTitle>
             <CardDescription>
-              Transaction history by country
+              Transaction history and analysis by country
             </CardDescription>
           </div>
           
@@ -238,7 +282,7 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
                 ))}
               </div>
               
-              {gpsLocation && (
+              {gpsLocationFromHook && (
                 <Button
                   variant={showOnlyCurrentLocation ? "default" : "outline"}
                   size="sm"
@@ -254,17 +298,8 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
         </div>
       </CardHeader>
       
-      <CardContent className="pb-4">
-        {loading || loadingRates ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 text-primary animate-spin" />
-            <span className="ml-2">{loading ? "Loading transactions..." : "Converting currencies..."}</span>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center py-8 text-red-500">
-            <p>Error loading transaction data</p>
-          </div>
-        ) : Object.keys(locationGroups).length === 0 ? (
+      <CardContent className="p-0">
+        {Object.keys(locationGroups).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <MapPin className="h-8 w-8 text-muted-foreground mb-2" />
             <p className="text-muted-foreground">No transactions with location data</p>
@@ -273,111 +308,129 @@ export function LocationTransactionList({ limit = 10, showFilters = true }: Loca
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(locationGroups).map(([locationKey, locationTransactions]) => {
-              const location = locationTransactions[0].location!;
-              // Use country name for comparison
-              const isCurrentLocation = gpsLocation && locationKey === gpsLocation.country;
-              
-              // Filter transactions that have been converted to match with the dashboard
-              const convertedLocationTxs = convertedTransactions.filter(tx => 
-                locationTransactions.some(locTx => locTx._id === tx._id)
-              );
-              
-              const totalSpent = calculateTotal(convertedLocationTxs);
-              
-              return (
-                <div key={locationKey} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-full ${isCurrentLocation ? 'bg-blue-500' : 'bg-slate-500'}`}>
-                        <MapPin className="h-3.5 w-3.5 text-white" />
+          <div className="divide-y divide-border">
+            {Object.entries(locationGroups)
+              .filter(([key]) => !showOnlyCurrentLocation || key === gpsLocationFromHook?.country)
+              .map(([locationKey, locationData]) => {
+                const location = locationData.transactions[0].location!;
+                const isCurrentLocation = gpsLocationFromHook && locationKey === gpsLocationFromHook.country;
+                
+                // Calculate totals in base currency for this specific location
+                const locationTransactions = convertedTransactions.filter(tx => 
+                  tx.location?.country === locationKey
+                );
+                
+                const totalExpenses = Math.abs(calculateTotal(
+                  locationTransactions.filter(tx => tx.amount < 0)
+                ));
+                const totalIncome = calculateTotal(
+                  locationTransactions.filter(tx => tx.amount > 0)
+                );
+                
+                return (
+                  <div key={locationKey} className="p-4 space-y-4">
+                    {/* Location Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${isCurrentLocation ? 'bg-primary' : 'bg-muted'}`}>
+                          <MapPin className="h-4 w-4 text-primary-foreground" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold flex items-center gap-2">
+                            {location.country}
+                            {isCurrentLocation && (
+                              <Badge variant="secondary" className="font-normal">
+                                Current
+                              </Badge>
+                            )}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {locationData.transactions.length} transactions
+                          </p>
+                        </div>
                       </div>
-                      <h3 className="font-medium flex items-center">
-                        {location.country}
-                        {isCurrentLocation && (
-                          <Badge variant="outline" className="ml-2 text-[10px] py-0 h-4">
-                            Current
-                          </Badge>
-                        )}
-                      </h3>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {locationTransactions.length} transactions
+
+                    {/* Summary Cards */}
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                      {/* Expenses Summary */}
+                      <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3 space-y-1">
+                        <div className="text-sm text-red-600 dark:text-red-400">Total Expenses</div>
+                        <div className="text-lg font-semibold text-red-700 dark:text-red-300">
+                          {formatCurrency(totalExpenses, baseCurrencyFromSettings)}
+                        </div>
+                      </div>
+
+                      {/* Income Summary */}
+                      <div className="rounded-lg bg-green-50 dark:bg-green-950/20 p-3 space-y-1">
+                        <div className="text-sm text-green-600 dark:text-green-400">Total Income</div>
+                        <div className="text-lg font-semibold text-green-700 dark:text-green-300">
+                          {formatCurrency(totalIncome, baseCurrencyFromSettings)}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="border rounded-md divide-y">
-                    {locationTransactions.slice(0, limit).map((transaction) => {
-                      const CategoryIcon = getCategoryIcon(transaction.category);
-                      
-                      // Find the converted transaction
-                      const convertedTx = convertedTransactions.find(tx => tx._id === transaction._id) || transaction;
-                      const isConverted = convertedTx.convertedAmount !== undefined && transaction.currency !== baseCurrency;
-                      
-                      return (
-                        <div 
-                          key={transaction._id} 
-                          className="p-2 text-sm flex items-center justify-between hover:bg-muted/50"
-                        >
-                          <div className="flex items-center gap-2">
-                            <CategoryIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                            <div>
-                              <div className="font-medium">{transaction.description}</div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                {new Date(transaction.date).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
-                                {transaction.location?.city && (
-                                  <span title={`${transaction.location?.city}, ${transaction.location?.country}`}>
-                                    • <MapPin className="h-2.5 w-2.5 inline text-muted-foreground" /> {transaction.location?.city}
-                                  </span>
-                                )}
+
+                    {/* Transactions List */}
+                    <div className="space-y-2">
+                      {locationData.transactions.slice(0, limit).map((transaction) => {
+                        const CategoryIcon = getCategoryIcon(transaction.category);
+                        const convertedTx = convertedTransactions.find(tx => tx._id === transaction._id) || transaction;
+                        const isConverted = convertedTx.convertedAmount !== undefined && transaction.currency !== baseCurrencyFromSettings;
+                        
+                        return (
+                          <div 
+                            key={transaction._id} 
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-1.5 rounded-full ${transaction.amount < 0 ? 'bg-red-100 dark:bg-red-950/50' : 'bg-green-100 dark:bg-green-950/50'}`}>
+                                <CategoryIcon className={`h-3.5 w-3.5 ${transaction.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} />
+                              </div>
+                              <div>
+                                <div className="font-medium">{transaction.description}</div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                  {new Date(transaction.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                  {transaction.location?.city && (
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="h-2.5 w-2.5" />
+                                      {transaction.location?.city}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex flex-col items-end">
-                            <div className={transaction.amount < 0 ? "text-red-500" : "text-green-500"}>
-                              {isConverted && (
+                            
+                            <div className={`text-right ${transaction.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {isConverted ? (
                                 <>
-                                  {formatCurrency(convertedTx.convertedAmount || 0, baseCurrency)}
-                                  <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                    ≈ {formatCurrency(transaction.amount, transaction.currency)}
+                                  <div>{formatCurrency(convertedTx.convertedAmount || 0, baseCurrencyFromSettings)}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatCurrency(transaction.amount, transaction.currency)}
                                   </div>
                                 </>
-                              )}
-                              {!isConverted && (
+                              ) : (
                                 formatCurrency(transaction.amount, transaction.currency)
                               )}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                    
-                    {locationTransactions.length > limit && (
-                      <div className="p-2 text-center text-sm text-muted-foreground">
-                        + {locationTransactions.length - limit} more transactions
+                        );
+                      })}
+                    </div>
+
+                    {locationData.transactions.length > limit && (
+                      <div className="text-center">
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                          + {locationData.transactions.length - limit} more transactions
+                        </Button>
                       </div>
                     )}
                   </div>
-                  
-                  <div className="flex justify-between text-sm px-2">
-                    <span className="text-muted-foreground">Total in {baseCurrency}:</span>
-                    <span className={totalSpent < 0 ? "text-red-500" : "text-green-500"}>
-                      {formatCurrency(totalSpent, baseCurrency)}
-                    </span>
-                  </div>
-                  
-                  {/* Show conversion summary */}
-                  <div className="text-xs text-muted-foreground px-2 mt-1">
-                    {getConvertedCount(convertedLocationTxs)} of {locationTransactions.length} transactions converted to {baseCurrency}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
       </CardContent>

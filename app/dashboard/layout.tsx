@@ -40,7 +40,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen max-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         {/* Mobile Sidebar Overlay */}
         {isMobileMenuOpen && (
           <div 
@@ -51,18 +51,19 @@ export default function DashboardLayout({
 
         {/* Sidebar */}
         <div className={`
-          fixed lg:sticky top-0 inset-y-0 left-0 z-50 h-screen overflow-y-auto
+          fixed lg:relative lg:flex flex-shrink-0 h-screen
           transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
           lg:translate-x-0 transition-transform duration-300 ease-in-out
         `}>
-          <AppSidebar />
+          <div className="h-full overflow-y-auto">
+            <AppSidebar />
+          </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col w-full min-w-0 overflow-y-auto">
-          {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           {children}
-        </div>
+        </main>
       </div>
     </SidebarProvider>
   );
