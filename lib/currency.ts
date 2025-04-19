@@ -342,28 +342,33 @@ const convertRatesFromUSD = (baseCurrency: string): { [key: string]: number } =>
 /**
  * Get exchange rate between two currencies using our API route
  */
-export const getExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
+export async function getExchangeRate(from: string, to: string): Promise<number> {
   try {
-    const response = await axios.get(API_BASE_URL, {
-      params: {
-        from: fromCurrency,
-        to: toCurrency
-      }
-    });
-    return response.data.conversion_rate;
+    // Use relative URL to automatically handle development/production environments
+    const response = await fetch(`/api/exchange-rates?from=${from}&to=${to}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch exchange rate');
+    }
+
+    const data = await response.json();
+    return data.rate;
   } catch (error) {
     console.error('Error fetching exchange rate:', error);
+    
     // Fallback to static rates if API fails
-    if (fromCurrency === 'USD') {
-      return FALLBACK_RATES[toCurrency];
-    } else if (toCurrency === 'USD') {
-      return 1 / FALLBACK_RATES[fromCurrency];
+    if (from === 'USD') {
+      return FALLBACK_RATES[to] || 1;
+    } else if (to === 'USD') {
+      return 1 / (FALLBACK_RATES[from] || 1);
     } else {
-      // Convert through USD
-      return FALLBACK_RATES[toCurrency] / FALLBACK_RATES[fromCurrency];
+      // Convert through USD as intermediary
+      const fromUSD = FALLBACK_RATES[from] || 1;
+      const toUSD = FALLBACK_RATES[to] || 1;
+      return toUSD / fromUSD;
     }
   }
-};
+}
 
 /**
  * Convert an amount from one currency to another using our API route

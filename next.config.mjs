@@ -13,20 +13,16 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
+  output: 'export',  // Enable static exports
+  images: {
+    unoptimized: true, // Required for static export
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
-  },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  }
 }
 
 if (userConfig) {

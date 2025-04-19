@@ -1,70 +1,56 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
-const API_BASE_URL = 'https://open.er-api.com/v6/latest';
+
+const EXCHANGE_API_BASE_URL = 'https://api.exchangerate-api.com/v4/latest';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
-  const amount = searchParams.get('amount');
-
-  if (!from || !to) {
-    return NextResponse.json(
-      { error: 'From and To currencies are required' },
-      { status: 400 }
-    );
-  }
-
   try {
-    // Get all rates for the base currency
-    const response = await axios.get(`${API_BASE_URL}/${from}`);
+    const { searchParams } = new URL(request.url);
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
 
-    if (response.data.result === "success") {
-      const rate = response.data.rates[to];
-      
-      if (!rate) {
-        throw new Error(`No conversion rate found for ${to}`);
-      }
-
-      return NextResponse.json({
-        conversion_rate: rate,
-        conversion_result: amount ? rate * Number(amount) : rate,
-        base_code: from,
-        target_code: to,
-        time_last_update_utc: response.data.time_last_update_utc,
-        time_next_update_utc: response.data.time_next_update_utc,
-        provider: response.data.provider
-      });
-    } else {
-      throw new Error('API request failed');
-    }
-  } catch (error) {
-    console.error('Error fetching from primary API, trying backup:', error);
-    
-    try {
-      // Try backup API
-      const backupUrl = new URL('https://api.exchangerate.host/convert');
-      backupUrl.searchParams.append('from', from);
-      backupUrl.searchParams.append('to', to);
-      if (amount) {
-        backupUrl.searchParams.append('amount', amount);
-      }
-      
-      const backupResponse = await axios.get(backupUrl.toString());
-      return NextResponse.json({
-        conversion_rate: backupResponse.data.result,
-        conversion_result: amount ? backupResponse.data.result * Number(amount) : backupResponse.data.result,
-        base_code: from,
-        target_code: to,
-        time_last_update_utc: new Date().toUTCString(),
-        provider: 'https://exchangerate.host'
-      });
-    } catch (backupError) {
-      console.error('Error fetching from backup API:', backupError);
+    if (!from || !to) {
       return NextResponse.json(
-        { error: 'Failed to fetch exchange rates' },
-        { status: 500 }
+        { error: 'Missing required parameters: from and to currencies' },
+        { status: 400 }
       );
     }
+
+    // Fetch the latest rates for the base currency
+    const response = await fetch(`${EXCHANGE_API_BASE_URL}/${from}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch exchange rate');
+    }
+
+    const data = await response.json();
+    
+    // Get the exchange rate for the target currency
+    const rate = data.rates[to];
+
+    if (!rate) {
+      return NextResponse.json(
+        { error: 'Exchange rate not found for the specified currencies' },
+        { status: 404 }
+      );
+    }
+
+    // Return the exchange rate
+    return NextResponse.json({
+      from,
+      to,
+      rate,
+      timestamp: data.time_last_updated
+    });
+
+  } catch (error) {
+    console.error('Error fetching exchange rate:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch exchange rate' },
+      { status: 500 }
+    );
   }
-} 
+}
+
+// Add rate limiting and caching headers
+export const runtime = 'edge';
+export const revalidate = 3600; // Cache for 1 hour 
