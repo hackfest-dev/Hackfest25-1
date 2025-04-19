@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowRightIcon,
+  ArrowRight,
   BarChart3,
   CalendarIcon,
   CircleSlash,
@@ -29,15 +29,53 @@ import {
 } from "lucide-react";
 
 import { SpendingChart, CategoryPieChart } from "@/components/dashboard/charts";
-import { LocationAnalytics } from "@/components/dashboard/location-analytics";
-import useTransactions, { Transaction } from "@/hooks/use-transactions";
+import { LocationTransactionList } from "@/components/dashboard/location-transaction-list";
+import useTransactions, { Transaction, TransactionStats as ApiTransactionStats } from "@/hooks/use-transactions";
 import { useAuth } from "@/context/AuthContext";
-import useUserSettings from "@/hooks/use-user-settings";
+import useUserSettings, { UserSettings } from "@/hooks/use-user-settings";
 import { getCategoryIcon } from "@/lib/transactionCategories";
 import { getExchangeRate, FALLBACK_RATES, getCurrencySymbol } from "@/lib/currency";
 
+// Add TransactionStats type
+interface ExtendedTransactionStats extends ApiTransactionStats {
+  previousIncome: number;
+  previousExpenses: number;
+  previousSavingsRate: number;
+}
+
+// Add CategoryData type
+interface CategoryData {
+  name: string;
+  value: number;
+  count: number;
+  color: string;
+}
+
+// Add TimeSpending type
+interface TimeSpending {
+  count: number;
+  amount: number;
+}
+
+// Add MonthlyData type
+interface MonthlyData {
+  month: string;
+  income: number;
+  expenses: number;
+  savings: number;
+  savingsRate: number;
+  date: Date;
+}
+
+// Add PreviousStats type
+interface PreviousStats {
+  income: number;
+  expenses: number;
+  savingsRate: number;
+}
+
 // Currency formatter function
-const formatCurrency = (amount: number, currency: string) => {
+const formatCurrency = (amount: number, currency: string): string => {
   const symbol = getCurrencySymbol(currency);
   const needsSpace = ['Fr', 'R', 'zł', 'RM', 'Rp', 'Col$', 'Mex$', 'S$', 'C$', 'A$', 'NZ$', 'HK$'];
   const formattedSymbol = needsSpace.includes(symbol) ? `${symbol} ` : symbol;
@@ -58,10 +96,11 @@ export default function AnalyticsPage() {
   const { settings } = useUserSettings();
   const { 
     transactions, 
-    loading,
+    loading: transactionsLoading,
     updateFilters,
-    stats,
-    fetchTransactions
+    fetchTransactions,
+    stats: apiStats,
+    error: transactionsError
   } = useTransactions();
   
   const [baseCurrency, setBaseCurrency] = useState<string>("USD");
@@ -72,8 +111,16 @@ export default function AnalyticsPage() {
   const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
   const [loadingRates, setLoadingRates] = useState(false);
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
-  const [categoryData, setCategoryData] = useState<any[]>([]);
-  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [stats, setStats] = useState<ExtendedTransactionStats>({
+    total: 0,
+    average: 0,
+    previousIncome: 0,
+    previousExpenses: 0,
+    previousSavingsRate: 0,
+    categoryStats: []
+  });
   
   // Update base currency from settings
   useEffect(() => {
@@ -199,11 +246,11 @@ export default function AnalyticsPage() {
   // Process category data
   const processCategoryData = (convertedData: Transaction[] = convertedTransactions) => {
     // Use either stats data or build from transactions
-    if (stats?.categoryStats && stats.categoryStats.length > 0) {
-      console.log("Using category stats from API:", stats.categoryStats.length);
+    if (apiStats?.categoryStats && apiStats.categoryStats.length > 0) {
+      console.log("Using category stats from API:", apiStats.categoryStats.length);
       
       // Convert stats to the format needed for charts - using exchange rates if needed
-      const processedCategoryData = stats.categoryStats
+      const processedCategoryData = apiStats.categoryStats
         .filter(cat => cat.amount < 0) // Only include expenses
         .map(cat => {
           // Convert the amount if needed
@@ -266,7 +313,7 @@ export default function AnalyticsPage() {
         name: category,
         value: totalAmount,
         count: transactions.length,
-        color: stats?.categoryStats?.find(c => c.category === category)?.color || "#6E56CF"
+        color: apiStats?.categoryStats?.find(c => c.category === category)?.color || "#6E56CF"
       };
     }).sort((a, b) => b.value - a.value);
     
@@ -461,427 +508,236 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="flex flex-col space-y-6 p-4 md:p-6">
-      {/* Analytics Header */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+    <div className="space-y-8 p-8">
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Expense Analytics</h1>
-          <p className="text-muted-foreground">Deep insights into your spending patterns</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+          <p className="text-sm text-slate-500 mt-1">Track your financial performance and insights</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
-            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-            <select 
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="bg-transparent border-none focus:outline-none text-sm"
-            >
-              <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="365">Last year</option>
-            </select>
-          </div>
-          
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
-            <Globe className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{baseCurrency}</span>
-          </div>
-          
+        <div className="flex items-center gap-4">
+          <Tabs value={dateRange} onValueChange={setDateRange} className="hidden sm:block">
+            <TabsList className="bg-slate-50 dark:bg-slate-900">
+              {[
+                { value: "7", label: "7D" },
+                { value: "30", label: "30D" },
+                { value: "90", label: "90D" },
+                { value: "365", label: "1Y" }
+              ].map((period) => (
+                <TabsTrigger
+                  key={period.value}
+                  value={period.value}
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800"
+                >
+                  {period.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
             onClick={handleRefresh}
-            disabled={refreshing}
+            disabled={refreshing || transactionsLoading}
+            className="gap-2"
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
-
-          {/* Debug button - only show in non-production */}
-          {process.env.NODE_ENV !== 'production' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                // Compute stats directly for debugging
-                const stats = computeExpenseStats();
-                
-                // Get category counts
-                const categoryNames = categoryData.map(c => c.name);
-                const uniqueCategories = new Set(convertedTransactions.map(t => t.category));
-                
-                console.log({
-                  transactions: transactions.length,
-                  convertedTransactions: convertedTransactions.length,
-                  stats,
-                  uniqueCategories: Array.from(uniqueCategories),
-                  displayedCategories: categoryNames,
-                  exchangeRates,
-                  timeSeriesData: timeSeriesData.length,
-                  categoryData: categoryData.length,
-                  baseCurrency,
-                  settings
-                });
-                
-                // Force refresh all data
-                fetchTransactionData();
-              }}
-            >
-              Debug
-            </Button>
-          )}
         </div>
       </div>
       
-      <Tabs defaultValue="overview" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="trends">Trends</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="overview" className="space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 p-4">
-                <div className="text-2xl font-bold">
-                  {loading ? <Skeleton className="h-7 w-24" /> : formatCurrency(totalExpenses, baseCurrency)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  in the last {dateRange} days
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm font-medium">Categories</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 p-4">
-                <div className="text-2xl font-bold">
-                  {loading ? <Skeleton className="h-7 w-24" /> : categoryData.length}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  unique spending categories
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm font-medium">Daily Average</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 p-4">
-                <div className="text-2xl font-bold">
-                  {loading ? 
-                    <Skeleton className="h-7 w-24" /> : 
-                    formatCurrency(totalExpenses / parseInt(dateRange), baseCurrency)
-                  }
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  average daily spending
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="p-4">
-                <CardTitle className="text-sm font-medium">Savings Rate</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 p-4">
-                <div className="text-2xl font-bold">
-                  {loading ? 
-                    <Skeleton className="h-7 w-24" /> : 
-                    totalIncome > 0 ? `${((totalIncome - totalExpenses) / totalIncome * 100).toFixed(1)}%` : "0%"
-                  }
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  of income saved
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* Spending Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <BarChart3 className="mr-2 h-4 w-4" />
-                Spending Trends
+      {/* Overview Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[
+          {
+            title: "Total Income",
+            value: formatCurrency(totalIncome, baseCurrency),
+            icon: DollarSign,
+            change: percentChange(totalIncome, stats.previousIncome),
+            trend: totalIncome > stats.previousIncome ? TrendingUp : TrendingDown,
+            description: "vs. previous period"
+          },
+          {
+            title: "Total Expenses",
+            value: formatCurrency(totalExpenses, baseCurrency),
+            icon: BarChart3,
+            change: percentChange(totalExpenses, stats.previousExpenses),
+            trend: totalExpenses < stats.previousExpenses ? TrendingUp : TrendingDown,
+            description: "vs. previous period"
+          },
+          {
+            title: "Savings Rate",
+            value: totalIncome > 0 ? `${((totalIncome - totalExpenses) / totalIncome * 100).toFixed(1)}%` : "0%",
+            icon: PieChart,
+            change: `${((totalIncome - totalExpenses) / totalIncome * 100 - stats.previousSavingsRate).toFixed(1)}%`,
+            trend: ((totalIncome - totalExpenses) / totalIncome) > stats.previousSavingsRate ? TrendingUp : TrendingDown,
+            description: "of total income"
+          },
+          {
+            title: "Active Currencies",
+            value: Object.keys(exchangeRates).length + 1,
+            icon: Globe,
+            description: "tracked currencies"
+          }
+        ].map((card, index) => (
+          <Card key={index} className="relative overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                {card.title}
               </CardTitle>
-              <CardDescription>Your expense patterns over time</CardDescription>
+              <div className="p-2 bg-slate-50 dark:bg-slate-900 rounded-full">
+                <card.icon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+              </div>
             </CardHeader>
-            <CardContent className="h-[350px]">
-              {loading ? (
-                <div className="h-full w-full flex items-center justify-center">
-                  <Skeleton className="h-full w-full" />
+            <CardContent>
+              <div className="text-2xl font-bold mb-1">{card.value}</div>
+              {card.change && (
+                <div className="flex items-center text-sm">
+                  <card.trend className={`h-4 w-4 mr-1 ${
+                    card.trend === TrendingUp ? "text-green-500" : "text-red-500"
+                  }`} />
+                  <span className={card.trend === TrendingUp ? "text-green-500" : "text-red-500"}>
+                    {card.change}
+                  </span>
+                  <span className="text-slate-500 dark:text-slate-400 ml-2">
+                    {card.description}
+                  </span>
                 </div>
-              ) : timeSeriesData.length === 0 ? (
-                <div className="h-full w-full flex items-center justify-center">
-                  <div className="text-center">
-                    <CircleSlash className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">No transaction data available</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full w-full">
-                  <SpendingChart 
-                    data={timeSeriesData}
-                    baseCurrency={baseCurrency} 
-                  />
+              )}
+              {!card.change && (
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  {card.description}
                 </div>
               )}
             </CardContent>
           </Card>
-          
-          {/* Category Breakdown */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
+        ))}
+      </div>
+
+      {/* Main Content */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        {/* Spending Chart - Spans 4 columns */}
+        <Card className="lg:col-span-4">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <PieChart className="mr-2 h-4 w-4" />
-                  Category Breakdown
-                </CardTitle>
-                <CardDescription>Where your money is going</CardDescription>
+            <CardTitle>Spending Overview</CardTitle>
+            <CardDescription>Your income and expenses over time</CardDescription>
               </CardHeader>
-              <CardContent className="h-[400px]">
-                {loading ? (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <Skeleton className="h-full w-full" />
-                  </div>
-                ) : categoryData.length === 0 ? (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <div className="text-center">
-                      <CircleSlash className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-muted-foreground">No category data available</p>
-                    </div>
+          <CardContent>
+            {transactionsLoading || loadingRates ? (
+              <div className="space-y-3">
+                <Skeleton className="h-[300px] w-full" />
                   </div>
                 ) : (
-                  <div className="h-full w-full">
-                    <CategoryPieChart 
-                      data={categoryData.map(c => ({ 
-                        name: c.name, 
-                        value: c.value,
-                        currency: baseCurrency
-                      }))} 
-                      colors={categoryData.map(c => c.color)}
-                      baseCurrency={baseCurrency}
-                    />
-                  </div>
+              <SpendingChart data={timeSeriesData} />
                 )}
               </CardContent>
             </Card>
             
-            <Card>
+        {/* Category Distribution - Spans 3 columns */}
+        <Card className="lg:col-span-3">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <GanttChartSquare className="mr-2 h-4 w-4" />
-                  Top Spending Categories
-                </CardTitle>
-                <CardDescription>Your biggest expenses</CardDescription>
+            <CardTitle>Expense Categories</CardTitle>
+            <CardDescription>Distribution of your spending</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6 max-h-[500px] overflow-auto pr-2">
-                  {loading ? (
-                    Array(5).fill(0).map((_, i) => (
-                      <Skeleton key={i} className="h-[50px] w-full" />
-                    ))
-                  ) : categoryData.length === 0 ? (
-                    <div className="h-[400px] flex items-center justify-center">
-                      <p className="text-muted-foreground">No category data available</p>
+            {transactionsLoading || loadingRates ? (
+              <div className="space-y-3">
+                <Skeleton className="h-[300px] w-full" />
                     </div>
                   ) : (
-                    // Show all categories instead of just top 5
-                    categoryData.map((category, index) => {
-                      const CategoryIcon = getCategoryIcon(category.name);
-                      const percentage = (category.value / totalExpenses) * 100;
-                      
-                      // Debug - log each category
-                      console.log(`Category ${index}: ${category.name}, Amount: ${category.value}`);
-                      
-                      return (
-                        <div key={index} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: category.color }}>
-                                <CategoryIcon className="h-4 w-4 text-white" />
-                              </div>
-                              <div>
-                                <div className="font-medium">{category.name}</div>
-                                <div className="text-xs text-muted-foreground">{category.count} transactions</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium">{formatCurrency(category.value, baseCurrency)}</div>
-                              <Badge variant="outline" className="ml-2">{percentage.toFixed(1)}%</Badge>
-                            </div>
-                          </div>
-                          <Progress value={percentage} className="h-2" />
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+              <CategoryPieChart data={categoryData.map(c => ({ 
+                name: c.name, 
+                value: c.value,
+                color: c.color
+              }))} />
+            )}
               </CardContent>
             </Card>
-          </div>
-        </TabsContent>
         
-        <TabsContent value="categories" className="space-y-6">
-          {/* Category List */}
-          <Card>
+        {/* Time of Day Analysis - Spans 3 columns */}
+        <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>All Spending Categories</CardTitle>
-              <CardDescription>Detailed breakdown of your expenses by category</CardDescription>
+            <CardTitle>Spending Patterns</CardTitle>
+            <CardDescription>When you tend to spend</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {loading ? (
-                  Array(8).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-[50px] w-full" />
-                  ))
-                ) : categoryData.length === 0 ? (
-                  <div className="h-[400px] flex items-center justify-center">
-                    <p className="text-muted-foreground">No category data available</p>
-                  </div>
-                ) : (
-                  categoryData.map((category, index) => {
-                    const CategoryIcon = getCategoryIcon(category.name);
-                    const percentage = (category.value / totalExpenses) * 100;
+            <div className="space-y-4">
+              {Object.entries(timeOfDaySpending).map(([timeOfDay, data]) => {
+                const totalSpending = Object.values(timeOfDaySpending).reduce((sum, period) => sum + period.amount, 0);
+                const percentage = totalSpending > 0 ? (data.amount / totalSpending) * 100 : 0;
                     
                     return (
-                      <div key={index} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: category.color }}>
-                              <CategoryIcon className="h-4 w-4 text-white" />
-                            </div>
-                            <div>
-                              <div className="font-medium">{category.name}</div>
-                              <div className="text-xs text-muted-foreground">{category.count} transactions</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">{formatCurrency(category.value, baseCurrency)}</div>
-                            <Badge variant="outline" className="ml-2">{percentage.toFixed(1)}%</Badge>
-                          </div>
+                  <div key={timeOfDay} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="capitalize">{timeOfDay}</span>
+                      <span className="font-medium">{formatCurrency(data.amount, baseCurrency)}</span>
                         </div>
                         <Progress value={percentage} className="h-2" />
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="trends" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Spending Patterns</CardTitle>
-              <CardDescription>How your spending has changed over time</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-8">
-                {loading ? (
-                  Array(5).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-[80px] w-full" />
-                  ))
-                ) : monthlyData.length === 0 ? (
-                  <div className="h-[400px] flex items-center justify-center">
-                    <p className="text-muted-foreground">No monthly data available</p>
-                  </div>
-                ) : (
-                  monthlyData.map((month, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium text-lg">{month.month}</div>
-                        <div className="flex items-center gap-2">
-                          {month.savingsRate > 0 ? (
-                            <Badge className="bg-green-500">{month.savingsRate.toFixed(1)}% saved</Badge>
-                          ) : (
-                            <Badge variant="destructive">No savings</Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                        <div className="flex items-center">
-                          <ArrowRightIcon className="text-green-500 h-5 w-5 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium">Income</div>
-                            <div className="text-lg">{formatCurrency(month.income, baseCurrency)}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center">
-                          <TrendingDown className="text-red-500 h-5 w-5 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium">Expenses</div>
-                            <div className="text-lg">{formatCurrency(month.expenses, baseCurrency)}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center">
-                          <DollarSign className={`${month.savings >= 0 ? 'text-green-500' : 'text-red-500'} h-5 w-5 mr-2`} />
-                          <div>
-                            <div className="text-sm font-medium">Net</div>
-                            <div className="text-lg">{formatCurrency(month.savings, baseCurrency)}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <Progress 
-                        value={(month.expenses / month.income) * 100} 
-                        className={`h-2 ${month.savingsRate > 20 ? 'bg-green-100' : month.savingsRate > 0 ? 'bg-amber-100' : 'bg-red-100'}`} 
-                      />
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>{data.count} transactions</span>
+                      <span>{percentage.toFixed(1)}% of total</span>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Spending by Time of Day</CardTitle>
-              <CardDescription>When you spend the most money</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {loading ? (
-                  Array(4).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-[80px] w-full" />
-                  ))
-                ) : (
-                  Object.entries(timeOfDaySpending).map(([timeOfDay, data], index) => {
-                    const percentage = totalExpenses > 0 ? (data.amount / totalExpenses) * 100 : 0;
-                    
-                    return (
-                      <div key={index} className="space-y-2">
-                        <div className="font-medium capitalize">{timeOfDay}</div>
-                        <div className="text-2xl font-bold">{formatCurrency(data.amount, baseCurrency)}</div>
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>{data.count} transactions</span>
-                          <span>{percentage.toFixed(1)}%</span>
-                        </div>
-                        <Progress value={percentage} className="h-2" />
                       </div>
                     );
-                  })
-                )}
+              })}
               </div>
             </CardContent>
           </Card>
+        
+        {/* Monthly Trends - Spans 4 columns */}
+        <Card className="lg:col-span-4">
+            <CardHeader>
+            <CardTitle>Monthly Trends</CardTitle>
+            <CardDescription>Your financial progress over months</CardDescription>
+            </CardHeader>
+            <CardContent>
+            <div className="space-y-4">
+              {monthlyData.slice(-6).map((month, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{month.month}</span>
+                    <div className="flex items-center gap-4">
+                      <Badge variant={month.savingsRate >= 20 ? "outline" : "default"}>
+                        {month.savingsRate.toFixed(1)}% saved
+                      </Badge>
+                      <span className="font-medium">
+                        {formatCurrency(month.savings, baseCurrency)}
+                      </span>
+                    </div>
+                  </div>
+                  <Progress 
+                    value={month.savingsRate} 
+                    className={`h-2 ${month.savingsRate >= 20 ? "bg-green-500" : ""}`}
+                  />
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Income: {formatCurrency(month.income, baseCurrency)}</span>
+                    <span>Expenses: {formatCurrency(month.expenses, baseCurrency)}</span>
+                        </div>
+                      </div>
+              ))}
+              </div>
+            </CardContent>
+          </Card>
+      </div>
           
-          <LocationAnalytics />
-        </TabsContent>
-      </Tabs>
+      {/* Location Analytics */}
+          <Card>
+            <CardHeader>
+          <CardTitle>Geographic Distribution</CardTitle>
+          <CardDescription>Where you spend your money around the world</CardDescription>
+            </CardHeader>
+            <CardContent>
+          <LocationTransactionList
+            transactions={convertedTransactions}
+            baseCurrency={baseCurrency}
+            loading={transactionsLoading || loadingRates}
+            error={transactionsError}
+            showFilters={true}
+            limit={5}
+          />
+            </CardContent>
+          </Card>
     </div>
   );
 } 

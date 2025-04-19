@@ -131,15 +131,24 @@ export default function SettingsPage() {
           break;
         case "location":
           updates.location = location;
+          updates.locationCode = locationCode;
+          updates.residencyLocation = residencyLocation;
           updates.residencyLocationCode = residencyLocationCode;
           break;
       }
 
-      await updateDoc(doc(db, "users", user.uid), updates);
-      toast.success("Settings updated successfully");
+      await updateSettings(updates);
+      toast({
+        title: "Settings updated",
+        description: "Your settings have been saved successfully",
+      });
     } catch (error) {
       console.error("Error updating settings:", error);
-      toast.error("Failed to update settings");
+      toast({
+        title: "Error",
+        description: "Failed to update settings. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsUpdating(false);
     }
