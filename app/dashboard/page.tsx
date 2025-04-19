@@ -580,22 +580,22 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </Button>
-            
+          </Button>
+          
             <TransactionDialog 
               defaultValues={{ amount: 0, type: 'income' }}
               trigger={
-                <Button
-                  variant="outline"
+          <Button 
+            variant="outline" 
                   size="sm"
                   className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                >
+          >
                   <Plus className="h-4 w-4 mr-1" />
                   Income
-                </Button>
+          </Button>
               }
             />
-            
+          
             <TransactionDialog 
               defaultValues={{ amount: 0, type: 'expense' }}
               trigger={
@@ -636,7 +636,7 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
                 ) : (
                   <ArrowDown className="h-4 w-4 mr-1" />
                 )}
-                {incomeChange}
+                  {incomeChange}
               </div>
             </div>
             <Progress 
@@ -667,7 +667,7 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
                 ) : (
                   <ArrowUp className="h-4 w-4 mr-1" />
                 )}
-                {expensesChange}
+                  {expensesChange}
               </div>
             </div>
             <Progress 
@@ -698,7 +698,7 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
                 ) : (
                   <ArrowDown className="h-4 w-4 mr-1" />
                 )}
-                {balanceChange}
+                  {balanceChange}
               </div>
             </div>
             <Progress 
@@ -727,10 +727,10 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
                 </div>
               </div>
             ) : (
-              <SpendingChart 
-                data={timeSeriesData}
-                baseCurrency={baseCurrency} 
-              />
+                <SpendingChart 
+                  data={timeSeriesData}
+                  baseCurrency={baseCurrency} 
+                />
             )}
           </CardContent>
         </Card>
@@ -741,90 +741,90 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
             <div>
               <CardTitle className="text-lg font-semibold">Recent Transactions</CardTitle>
               <CardDescription>Your latest financial activity</CardDescription>
-            </div>
+              </div>
             <Button variant="ghost" size="sm" className="gap-1" asChild>
-              <a href="/dashboard/transactions">
+                          <a href="/dashboard/transactions">
                 View All
                 <ChevronRight className="h-4 w-4" />
-              </a>
-            </Button>
+                          </a>
+                        </Button>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[400px] rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
+            <Table>
+              <TableHeader>
+                <TableRow>
                     <TableHead>Description</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Category</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading || loadingRates ? (
-                    Array(5).fill(0).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : convertedTransactions.length === 0 ? (
-                    <TableRow>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading || loadingRates ? (
+                  Array(5).fill(0).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : convertedTransactions.length === 0 ? (
+                  <TableRow>
                       <TableCell colSpan={4} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center gap-1">
                           <Receipt className="h-8 w-8 text-muted-foreground/30" />
                           <p className="text-sm text-muted-foreground">No transactions found</p>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    convertedTransactions
-                      .slice()
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .slice(0, 10)
-                      .map((transaction) => {
-                        const CategoryIcon = getCategoryIcon(transaction.category);
-                        return (
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  convertedTransactions
+                    .slice()
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .slice(0, 10)
+                    .map((transaction) => {
+                    const CategoryIcon = getCategoryIcon(transaction.category);
+                    return (
                           <TableRow key={transaction._id}>
-                            <TableCell>
+                        <TableCell>
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                                   <CategoryIcon className="h-4 w-4 text-primary" />
                                 </div>
                                 <div>
                                   <div className="font-medium">{transaction.description}</div>
-                                  {transaction.location?.city && (
+                            {transaction.location?.city && (
                                     <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                      <MapPin className="h-3 w-3" />
+                                <MapPin className="h-3 w-3" />
                                       {transaction.location.city}
                                     </div>
-                                  )}
+                            )}
                                 </div>
-                              </div>
-                            </TableCell>
+                          </div>
+                        </TableCell>
                             <TableCell className="text-muted-foreground">
                               {new Date(transaction.date).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               <div className={transaction.amount < 0 ? "text-red-500" : "text-green-500"}>
-                                {formatCurrency(transaction.amount, transaction.currency)}
-                              </div>
-                              {transaction.currency !== baseCurrency && transaction.convertedAmount && (
+                            {formatCurrency(transaction.amount, transaction.currency)}
+                          </div>
+                          {transaction.currency !== baseCurrency && transaction.convertedAmount && (
                                 <div className="text-xs text-muted-foreground">
-                                  ≈ {formatCurrency(transaction.convertedAmount, baseCurrency)}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
+                              ≈ {formatCurrency(transaction.convertedAmount, baseCurrency)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
                               <Badge variant="secondary">
                                 {transaction.category}
                               </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                  )}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
             </ScrollArea>
           </CardContent>
         </Card>

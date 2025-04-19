@@ -26,6 +26,11 @@ import {
   CreditCard,
   BarChart,
   Banknote,
+  Sliders,
+  Save,
+  CheckCircle,
+  Plus,
+  X,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,6 +40,30 @@ import useUserSettings from "@/hooks/use-user-settings";
 import { formatCurrency } from "@/lib/currency";
 import { toast } from "@/components/ui/use-toast";
 import { QualityMetrics } from "@/components/dashboard/quality-metrics";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Slider } from "@/components/ui/slider";
+import {
+  Check,
+  PlusCircle,
+  MinusCircle,
+} from "lucide-react";
 
 // Type definitions
 interface RelocationPreference {
@@ -70,8 +99,10 @@ interface AIRecommendation {
   monthlyEstimate: number;
 }
 
-// Add these types before the generateComparisonData function
+// Update interfaces
 interface CityData {
+  city: string;
+  country: string;
   currency: string;
   categories: {
     housing: {
@@ -101,6 +132,19 @@ interface CityData {
     climate: number;
     pollution: number;
   };
+}
+
+interface ChartDataItem {
+  name: string;
+  color: string;
+  total: number;
+  qualityMetrics: {
+    safety: number;
+    healthcare: number;
+    climate: number;
+    pollution: number;
+  };
+  [key: string]: any;
 }
 
 // Helper function to call Gemini API
@@ -479,7 +523,7 @@ export default function RelocationPlanner() {
   };
   
   // Generate AI recommendations
-  const generateAIRecommendations = async () => {
+  const generateAIRecommendations = async (force: boolean = false) => {
     if (budget <= 0) {
       toast({
         title: "Invalid Budget",
@@ -494,6 +538,15 @@ export default function RelocationPlanner() {
         title: "Location Required",
         description: "Please wait for your current location to be detected or enter it manually",
         variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!force && aiRecommendations.length > 0) {
+      toast({
+        title: "Recommendations Already Generated",
+        description: "You've already generated recommendations. Use the 'Generate' button again to refresh.",
+        variant: "default"
       });
       return;
     }
@@ -766,451 +819,429 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
   };
   
   return (
-    <div className="container mx-auto py-8 max-w-6xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <Button
-            variant="outline"
-            className="mb-2"
-            onClick={() => router.push('/dashboard')}
-          >
-            <ArrowLeftCircle className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Button>
-          <h1 className="text-3xl font-bold">Relocation Planner</h1>
-          <p className="text-muted-foreground">
+    <div className="container mx-auto py-6 max-w-6xl">
+      {/* Header - Modernized */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-6 border-b">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeftCircle className="h-4 w-4" />
+              Dashboard
+            </Button>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Relocation Planner</h1>
+          <p className="text-sm text-muted-foreground">
             Find your ideal city based on budget and lifestyle preferences
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Globe className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            Base Currency: {baseCurrency}
-          </span>
+        <div className="flex items-center gap-4">
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{baseCurrency}</span>
+              </div>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80">
+              <div className="flex justify-between space-x-4">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold">Base Currency</h4>
+                  <p className="text-sm text-muted-foreground">
+                    All amounts are converted to {baseCurrency} for comparison
+                  </p>
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         </div>
       </div>
-      
+
       {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="ml-4">Loading your preferences...</p>
+        <div className="flex items-center justify-center h-[400px]">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading your preferences...</p>
+          </div>
         </div>
       ) : (
-        <>
-          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-3 mb-8">
-              <TabsTrigger value="preferences">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Preferences
-              </TabsTrigger>
-              <TabsTrigger value="recommendations">
-                <Lightbulb className="h-4 w-4 mr-2" />
-                Recommendations
-              </TabsTrigger>
-              <TabsTrigger value="compare">
-                <BarChart className="h-4 w-4 mr-2" />
-                Compare Cities
-              </TabsTrigger>
-            </TabsList>
-            
-            {/* Preferences Tab */}
-            <TabsContent value="preferences" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Your Relocation Preferences</CardTitle>
-                  <CardDescription>
-                    Set your budget and preferences to get personalized city recommendations
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-medium mb-4">Monthly Budget</h3>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1">
-                            <input 
-                              type="range" 
-                              min="500" 
-                              max="5000" 
-                              step="100" 
-                              value={budget || 2000} 
-                              onChange={(e) => setBudget(parseInt(e.target.value))} 
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                              <span>{formatCurrency(500, baseCurrency)}</span>
-                              <span>{formatCurrency(2500, baseCurrency)}</span>
-                              <span>{formatCurrency(5000, baseCurrency)}</span>
-                            </div>
-                          </div>
-                          <div className="w-48 flex-shrink-0">
-                            <div className="flex items-center gap-2">
-                              <div className="relative w-full">
-                                <Banknote className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={budget || 2000}
-                                  onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value) || 0))}
-                                  className="pl-9"
-                                  placeholder="Enter budget"
-                                />
-                              </div>
-                              <span className="text-sm font-medium">{baseCurrency}</span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">monthly budget</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Must-Have Features</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Select the features that are essential for your next location
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {featureOptions.map(feature => (
-                          <Badge 
-                            key={feature.value}
-                            variant={mustHaveFeatures.includes(feature.value) ? "default" : "outline"}
-                            className="cursor-pointer"
-                            onClick={() => toggleFeature(feature.value)}
-                          >
-                            {feature.label}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Preferred Regions</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Select the regions you'd like to live in
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {regionOptions.map(region => (
-                          <Badge 
-                            key={region.value}
-                            variant={preferredRegions.includes(region.value) ? "default" : "outline"}
-                            className="cursor-pointer"
-                            onClick={() => toggleRegion(region.value)}
-                          >
-                            {region.label}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Lifestyle Preferences</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        What kind of lifestyle are you looking for?
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {lifestyleOptions.map(lifestyle => (
-                          <Badge 
-                            key={lifestyle.value}
-                            variant={lifestylePreferences.includes(lifestyle.value) ? "default" : "outline"}
-                            className="cursor-pointer"
-                            onClick={() => toggleLifestyle(lifestyle.value)}
-                          >
-                            {lifestyle.label}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="pt-4 flex justify-end">
-                      <Button 
-                        onClick={saveUserPreferences}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>Save Preferences</>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            {/* Recommendations Tab */}
-            <TabsContent value="recommendations" className="space-y-6">
-              <Card>
-                <CardHeader>
+        <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+            <TabsTrigger value="preferences" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              <span>Preferences</span>
+            </TabsTrigger>
+            <TabsTrigger value="recommendations" className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4" />
+              <span>Cities</span>
+            </TabsTrigger>
+            <TabsTrigger value="compare" className="flex items-center gap-2">
+              <BarChart className="h-4 w-4" />
+              <span>Compare</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Preferences Tab - Enhanced */}
+          <TabsContent value="preferences">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                  <Sliders className="h-5 w-5 text-primary" />
+                  Your Relocation Preferences
+                </CardTitle>
+                <CardDescription>
+                  Set your budget and preferences to get personalized city recommendations
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Budget Section - Enhanced */}
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center">
-                        AI Relocation Advisor
-                        <Badge className="ml-2 bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-1">
-                          <Sparkles className="h-3 w-3" />
-                          <span>Gemini Powered</span>
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Get personalized city recommendations based on your preferences
-                      </CardDescription>
-                    </div>
-                    <Button 
-                      onClick={generateAIRecommendations} 
-                      disabled={loadingAI}
-                      className="flex items-center gap-2"
-                    >
-                      {loadingAI ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Analyzing data...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="h-4 w-4" />
-                          <span>Generate Recommendations</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex gap-2">
-                      <Input 
-                        placeholder="Additional preferences (e.g., 'I want a beach city with good internet')" 
-                        value={aiPrompt || ""}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAiPrompt(e.target.value)}
-                        className="flex-1"
-                        disabled={loadingAI}
+                    <h3 className="text-sm font-medium">Monthly Budget</h3>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={budget}
+                        onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-[120px] text-right"
                       />
+                      <span className="text-sm font-medium">{baseCurrency}</span>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
+                  <div className="space-y-2">
+                    <Slider
+                      value={[budget]}
+                      onValueChange={(value) => setBudget(value[0])}
+                      min={500}
+                      max={5000}
+                      step={100}
+                      className="py-4"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{formatCurrency(500, baseCurrency)}</span>
+                      <span>{formatCurrency(2500, baseCurrency)}</span>
+                      <span>{formatCurrency(5000, baseCurrency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Features Section - Enhanced */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Must-Have Features</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {featureOptions.map(feature => (
+                      <Badge
+                        key={feature.value}
+                        variant={mustHaveFeatures.includes(feature.value) ? "default" : "outline"}
+                        className="cursor-pointer transition-colors"
+                        onClick={() => toggleFeature(feature.value)}
+                      >
+                        {feature.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Regions Section - Enhanced */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Preferred Regions</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {regionOptions.map(region => (
+                      <Badge
+                        key={region.value}
+                        variant={preferredRegions.includes(region.value) ? "default" : "outline"}
+                        className="cursor-pointer transition-colors"
+                        onClick={() => toggleRegion(region.value)}
+                      >
+                        {region.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lifestyle Section - Enhanced */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Lifestyle Preferences</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {lifestyleOptions.map(lifestyle => (
+                      <Badge
+                        key={lifestyle.value}
+                        variant={lifestylePreferences.includes(lifestyle.value) ? "default" : "outline"}
+                        className="cursor-pointer transition-colors"
+                        onClick={() => toggleLifestyle(lifestyle.value)}
+                      >
+                        {lifestyle.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={saveUserPreferences}
+                    disabled={isLoading}
+                    className="flex items-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        <span>Save Preferences</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Recommendations Tab - Enhanced */}
+          <TabsContent value="recommendations">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-lg font-semibold">AI City Recommendations</CardTitle>
+                  <CardDescription>
+                    Personalized city suggestions based on your preferences
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => generateAIRecommendations(true)}
+                  disabled={loadingAI}
+                  className="flex items-center gap-2"
+                >
+                  {loadingAI ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4" />
+                      <span>Generate</span>
+                    </>
+                  )}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex">
+                    <Input
+                      placeholder="Additional preferences (e.g., 'I want a beach city with good internet')"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      className="flex-1"
+                      disabled={loadingAI}
+                    />
+                  </div>
+
                   {aiRecommendations.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <Brain className="h-16 w-16 text-primary/30 mx-auto mb-3" />
-                      <h3 className="text-lg font-medium mb-1">No recommendations generated yet</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Click the button above to get personalized destination recommendations
-                        based on your preferences and budget.
+                    <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                      <Brain className="h-12 w-12 text-primary/20 mb-4" />
+                      <p className="text-lg font-medium">No recommendations yet</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Click generate to get personalized city recommendations
                       </p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {aiRecommendations.map((rec) => (
-                        <Card key={rec.id} className="border-2 border-primary/10 shadow-sm">
+                        <Card key={rec.id} className="relative overflow-hidden">
                           <CardHeader className="pb-2">
-                            <div className="flex items-start justify-between">
+                            <div className="flex items-center justify-between">
                               <div>
                                 <CardTitle className="text-lg">{rec.city}</CardTitle>
                                 <CardDescription>{rec.country}</CardDescription>
                               </div>
-                              <div className="flex items-center gap-1 text-primary">
-                                <Sparkles className="h-4 w-4" />
-                                <span className="font-bold">{rec.lifestyleMatch}%</span>
-                                <span className="text-sm text-muted-foreground">match</span>
-                              </div>
+                              <HoverCard>
+                                <HoverCardTrigger asChild>
+                                  <div className="flex items-center gap-1 text-primary cursor-help">
+                                    <Sparkles className="h-4 w-4" />
+                                    <span className="font-bold">{rec.lifestyleMatch}%</span>
+                                  </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent>
+                                  <p className="text-sm">Lifestyle match score based on your preferences</p>
+                                </HoverCardContent>
+                              </HoverCard>
                             </div>
                           </CardHeader>
-                          <CardContent>
-                            <div className="space-y-4">
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <h4 className="text-sm font-medium">Potential Savings</h4>
-                                  <Badge className="bg-green-100 text-green-800">
-                                    {rec.savingsEstimate}% lower
-                                  </Badge>
-                                </div>
-                                <Progress value={rec.savingsEstimate} className="h-2" />
-                              </div>
-                              
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium">Monthly Estimate:</span>
-                                <Badge variant="outline" className="font-medium">
-                                  {formatCurrency(rec.monthlyEstimate || 0, baseCurrency)}
+                          <CardContent className="space-y-4">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <h4 className="text-sm font-medium">Cost of Living</h4>
+                                <Badge variant="outline">
+                                  {rec.savingsEstimate}% vs current
                                 </Badge>
                               </div>
-                              
-                              <div>
-                                <h4 className="text-sm font-medium mb-2">Why this location matches you:</h4>
-                                <div className="space-y-2">
-                                  {rec.details.map((detail, i) => (
-                                    <div key={i} className="flex items-start gap-2">
-                                      <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                                      <p className="text-sm text-muted-foreground">{detail}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="pt-2">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="w-full"
-                                  onClick={() => saveCity(rec)}
-                                  disabled={savedCities.some(city => city.city === rec.city)}
-                                >
-                                  {savedCities.some(city => city.city === rec.city) ? 
-                                    'Already Saved' : 'Save to Compare'}
-                                </Button>
-                              </div>
+                              <Progress 
+                                value={Math.abs(rec.savingsEstimate)} 
+                                className={`h-2 ${rec.savingsEstimate < 0 ? "bg-red-500" : "bg-green-500"}`}
+                              />
                             </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">Monthly Estimate:</span>
+                              <Badge variant="secondary" className="font-mono">
+                                {formatCurrency(rec.monthlyEstimate, baseCurrency)}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Key Benefits</h4>
+                              {rec.details.map((detail, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                  <p className="text-sm text-muted-foreground">{detail}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => saveCity(rec)}
+                              disabled={savedCities.some(city => city.city === rec.city)}
+                            >
+                              {savedCities.some(city => city.city === rec.city) ? (
+                                <span className="flex items-center gap-2">
+                                  <Check className="h-4 w-4" />
+                                  Saved
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-2">
+                                  <Plus className="h-4 w-4" />
+                                  Save to Compare
+                                </span>
+                              )}
+                            </Button>
                           </CardContent>
                         </Card>
                       ))}
                     </div>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Compare Tab - Enhanced */}
+          <TabsContent value="compare">
+            {savedCities.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center h-[400px] text-center">
+                  <BarChart className="h-12 w-12 text-primary/20 mb-4" />
+                  <p className="text-lg font-medium">No cities saved yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Generate recommendations and save cities to compare them
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => setActiveTab("recommendations")}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Get Recommendations
+                  </Button>
                 </CardContent>
               </Card>
-            </TabsContent>
-            
-            {/* Compare Tab */}
-            <TabsContent value="compare" className="space-y-6">
-              {savedCities.length === 0 ? (
+            ) : (
+              <div className="space-y-6">
+                {/* Saved Cities Grid */}
                 <Card>
-                  <CardContent className="p-8 text-center">
-                    <BarChart className="h-16 w-16 text-primary/30 mx-auto mb-3" />
-                    <h3 className="text-lg font-medium mb-1">No cities saved yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Generate recommendations and save cities to compare them.
-                    </p>
-                    <Button 
-                      onClick={() => setActiveTab("recommendations")}
-                      variant="outline"
-                    >
-                      Go to Recommendations
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Saved Cities</CardTitle>
-                      <CardDescription>
-                        Compare your saved cities side by side
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {savedCities.map(city => (
-                          <Card key={city.city} className="overflow-hidden">
-                            <CardHeader className="p-4">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <CardTitle className="text-lg">{city.city}</CardTitle>
-                                  <CardDescription>{city.country}</CardDescription>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-8 w-8 p-0" 
-                                  onClick={() => removeCity(city.city)}
-                                >
-                                  &times;
-                                </Button>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                              <div className="text-xl font-bold mb-1">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold">Saved Cities</CardTitle>
+                    <CardDescription>Compare your shortlisted cities</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {savedCities.map(city => (
+                        <Card key={city.city} className="relative">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-2 h-6 w-6"
+                            onClick={() => removeCity(city.city)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-base">{city.city}</CardTitle>
+                            <CardDescription>{city.country}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="text-xl font-bold">
                                 {formatCurrency(city.monthlyEstimate, baseCurrency)}
                               </div>
-                              <div className="text-sm text-muted-foreground mb-3">
-                                Monthly estimate
-                              </div>
-                              
-                              <div className="flex items-center gap-1 text-sm">
-                                <Badge className="bg-green-100 text-green-800">
-                                  {city.savingsEstimate}% savings
-                                </Badge>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Global Cost Map */}
-                  <Card className="col-span-12">
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                                {city.savingsEstimate}% savings
+                              </Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Cost Comparison Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold">Cost Comparison</CardTitle>
+                    <CardDescription>Monthly expenses breakdown</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[400px]">
+                    <ComparisonChart data={compareData} baseCurrency={baseCurrency} />
+                  </CardContent>
+                </Card>
+
+                {/* Quality of Life Comparison */}
+                {qualityData.length > 0 && (
+                  <Card>
                     <CardHeader>
-                      <CardTitle>Global Cost Map</CardTitle>
-                      <CardDescription>
-                        Visualize your saved cities on a world map
-                      </CardDescription>
+                      <CardTitle className="text-lg font-semibold">Quality of Life</CardTitle>
+                      <CardDescription>Compare living standards across cities</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-[400px] w-full">
-                        <LocationHeatMap 
-                          cities={savedCities.map(city => ({
-                            name: city.city,
-                            country: city.country,
-                            coordinates: getCityCoordinates(city.city, city.country),
-                            cost: city.monthlyEstimate,
-                            currency: baseCurrency
-                          }))}
-                          baseCurrency={baseCurrency}
-                        />
-                      </div>
+                      <QualityMetrics data={qualityData} />
                     </CardContent>
                   </Card>
-                  
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Card className="col-span-2">
-                      <CardHeader>
-                        <CardTitle>Monthly Total ({baseCurrency})</CardTitle>
-                        <CardDescription>
-                          Estimated total monthly expenses in each location
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-[400px] w-full">
-                          <MonthlyTotalChart data={monthlyTotals} baseCurrency={baseCurrency} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  
-                  {compareData.length > 0 && (
-                    <Card className="col-span-2">
-                      <CardHeader>
-                        <CardTitle>Expense Breakdown Comparison</CardTitle>
-                        <CardDescription>
-                          See how expenses compare across categories
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-[400px] w-full">
-                          <ComparisonChart data={compareData} baseCurrency={baseCurrency} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+                )}
 
-                  {qualityData.length > 0 && (
-                    <Card className="col-span-2">
-                      <CardHeader>
-                        <CardTitle>Quality of Life Comparison</CardTitle>
-                        <CardDescription>
-                          Compare quality of life metrics across cities
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <QualityMetrics data={qualityData} />
-                      </CardContent>
-                    </Card>
-                  )}
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
-        </>
+                {/* Location Map */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold">Global View</CardTitle>
+                    <CardDescription>Your selected cities on the world map</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[400px]">
+                    <LocationHeatMap
+                      cities={savedCities.map(city => ({
+                        name: city.city,
+                        country: city.country,
+                        coordinates: getCityCoordinates(city.city, city.country),
+                        cost: city.monthlyEstimate,
+                        currency: baseCurrency
+                      }))}
+                      baseCurrency={baseCurrency}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
