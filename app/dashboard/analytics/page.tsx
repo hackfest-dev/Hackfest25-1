@@ -26,6 +26,11 @@ import {
   RefreshCw,
   TrendingDown,
   TrendingUp,
+  Clock,
+  Sunrise,
+  Sun,
+  Sunset,
+  Moon,
 } from "lucide-react";
 
 import { SpendingChart, CategoryPieChart } from "@/components/dashboard/charts";
@@ -619,20 +624,30 @@ export default function AnalyticsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Spending Chart - Spans 4 columns */}
         <Card className="lg:col-span-4">
-              <CardHeader>
+          <CardHeader>
             <CardTitle>Spending Overview</CardTitle>
             <CardDescription>Your income and expenses over time</CardDescription>
-              </CardHeader>
-          <CardContent>
+          </CardHeader>
+          <CardContent className="min-h-[400px] pt-4">
             {transactionsLoading || loadingRates ? (
               <div className="space-y-3">
-                <Skeleton className="h-[300px] w-full" />
-                  </div>
-                ) : (
-              <SpendingChart data={timeSeriesData} />
-                )}
-              </CardContent>
-            </Card>
+                <Skeleton className="h-[350px] w-full" />
+              </div>
+            ) : timeSeriesData.length === 0 ? (
+              <div className="h-[350px] w-full flex items-center justify-center">
+                <div className="text-center">
+                  <BarChart3 className="h-8 w-8 text-primary/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No transaction data available</p>
+                  <p className="text-xs text-muted-foreground mt-1">Add transactions to see your spending trends</p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-[350px] w-full">
+                <SpendingChart data={timeSeriesData} baseCurrency={baseCurrency} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
             
         {/* Category Distribution - Spans 3 columns */}
         <Card className="lg:col-span-3">
@@ -657,33 +672,103 @@ export default function AnalyticsPage() {
         
         {/* Time of Day Analysis - Spans 3 columns */}
         <Card className="lg:col-span-3">
-            <CardHeader>
+          <CardHeader>
             <CardTitle>Spending Patterns</CardTitle>
-            <CardDescription>When you tend to spend</CardDescription>
-            </CardHeader>
-            <CardContent>
-            <div className="space-y-4">
-              {Object.entries(timeOfDaySpending).map(([timeOfDay, data]) => {
-                const totalSpending = Object.values(timeOfDaySpending).reduce((sum, period) => sum + period.amount, 0);
-                const percentage = totalSpending > 0 ? (data.amount / totalSpending) * 100 : 0;
+            <CardDescription>Your spending habits throughout the day</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {transactionsLoading || loadingRates ? (
+              <div className="space-y-3">
+                <Skeleton className="h-[300px] w-full" />
+              </div>
+            ) : Object.values(timeOfDaySpending).every(data => data.amount === 0) ? (
+              <div className="h-[300px] w-full flex items-center justify-center">
+                <div className="text-center">
+                  <Clock className="h-8 w-8 text-primary/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No spending pattern data available</p>
+                  <p className="text-xs text-muted-foreground mt-1">Add transactions to see your spending patterns</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(timeOfDaySpending).map(([timeOfDay, data]) => {
+                  const totalSpending = Object.values(timeOfDaySpending).reduce((sum, period) => sum + period.amount, 0);
+                  const percentage = totalSpending > 0 ? (data.amount / totalSpending) * 100 : 0;
+                  const timeRanges = {
+                    morning: "6 AM - 12 PM",
+                    afternoon: "12 PM - 5 PM",
+                    evening: "5 PM - 9 PM",
+                    night: "9 PM - 6 AM"
+                  };
+                      
+                  return (
+                    <div key={timeOfDay} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-full ${
+                            timeOfDay === "morning" ? "bg-blue-100 text-blue-500" :
+                            timeOfDay === "afternoon" ? "bg-yellow-100 text-yellow-600" :
+                            timeOfDay === "evening" ? "bg-orange-100 text-orange-500" :
+                            "bg-indigo-100 text-indigo-500"
+                          }`}>
+                            {timeOfDay === "morning" ? <Sunrise className="h-4 w-4" /> :
+                             timeOfDay === "afternoon" ? <Sun className="h-4 w-4" /> :
+                             timeOfDay === "evening" ? <Sunset className="h-4 w-4" /> :
+                             <Moon className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <span className="capitalize font-medium">{timeOfDay}</span>
+                            <span className="text-xs text-muted-foreground ml-2">({timeRanges[timeOfDay as keyof typeof timeRanges]})</span>
+                          </div>
+                        </div>
+                        <span className="font-medium">{formatCurrency(data.amount, baseCurrency)}</span>
+                      </div>
+                      <Progress 
+                        value={percentage} 
+                        className={`h-2 ${
+                          timeOfDay === "morning" ? "bg-blue-500" :
+                          timeOfDay === "afternoon" ? "bg-yellow-500" :
+                          timeOfDay === "evening" ? "bg-orange-500" :
+                          "bg-indigo-500"
+                        }`} 
+                      />
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>{data.count} transactions</span>
+                        <span>{percentage.toFixed(1)}% of total</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                  <h4 className="text-sm font-medium mb-2">Pattern Insights</h4>
+                  {(() => {
+                    const maxSpending = Object.entries(timeOfDaySpending).reduce((max, [time, data]) => 
+                      data.amount > max.amount ? { time, amount: data.amount } : max,
+                      { time: "", amount: 0 }
+                    );
+                    const avgTransactionValue = Object.values(timeOfDaySpending).reduce((acc, data) => 
+                      data.count > 0 ? acc + (data.amount / data.count) : acc, 
+                      0
+                    ) / Object.values(timeOfDaySpending).filter(data => data.count > 0).length;
                     
                     return (
-                  <div key={timeOfDay} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="capitalize">{timeOfDay}</span>
-                      <span className="font-medium">{formatCurrency(data.amount, baseCurrency)}</span>
-                        </div>
-                        <Progress value={percentage} className="h-2" />
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>{data.count} transactions</span>
-                      <span>{percentage.toFixed(1)}% of total</span>
-                    </div>
+                      <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                        <p>• Peak spending occurs during <span className="font-medium capitalize">{maxSpending.time}</span></p>
+                        <p>• Average transaction value: {formatCurrency(avgTransactionValue, baseCurrency)}</p>
+                        <p>• Most frequent spending period: {
+                          Object.entries(timeOfDaySpending)
+                            .reduce((max, [time, data]) => data.count > max.count ? { time, count: data.count } : max,
+                              { time: "", count: 0 }
+                            ).time
+                        }</p>
                       </div>
                     );
-              })}
+                  })()}
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
         
         {/* Monthly Trends - Spans 4 columns */}
         <Card className="lg:col-span-4">
@@ -740,4 +825,4 @@ export default function AnalyticsPage() {
           </Card>
     </div>
   );
-} 
+}
