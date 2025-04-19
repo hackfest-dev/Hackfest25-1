@@ -72,13 +72,14 @@ export function useGPSLocation() {
       setLocation(locationData);
       setError(null);
     } catch (err) {
-      setError('Failed to get location details');
-      console.error('Error getting location:', err);
+      console.error('Error getting location details:', err);
       
       // Try to use cached data as fallback
       const cachedData = localStorage.getItem('gps_location_cache');
       if (cachedData) {
         setLocation(JSON.parse(cachedData));
+      } else {
+        setError('Failed to get location details');
       }
     } finally {
       setLoading(false);
@@ -109,38 +110,43 @@ export function useGPSLocation() {
     setError(null);
     setPermissionDenied(false);
     
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          fetchLocationData(latitude, longitude);
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          if (error.code === 1) { // PERMISSION_DENIED
-            setPermissionDenied(true);
-            setError('Location permission denied. Please enable location services.');
-          } else {
-            setError(`Geolocation error: ${error.message}`);
-          }
-          setLoading(false);
-          
-          // Try to use cached data as fallback
-          const cachedData = localStorage.getItem('gps_location_cache');
-          if (cachedData) {
-            setLocation(JSON.parse(cachedData));
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000 // Accept positions up to 1 minute old
-        }
-      );
-    } else {
+    if (!navigator.geolocation) {
       setError('Geolocation is not supported by this browser');
       setLoading(false);
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        fetchLocationData(latitude, longitude);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        if (error.code === 1) { // PERMISSION_DENIED
+          setPermissionDenied(true);
+          setError('Location permission denied. Please enable location services.');
+        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+          setError('Location information is unavailable.');
+        } else if (error.code === 3) { // TIMEOUT
+          setError('The request to get location timed out.');
+        } else {
+          setError('An unknown error occurred while getting location.');
+        }
+        setLoading(false);
+        
+        // Try to use cached data as fallback
+        const cachedData = localStorage.getItem('gps_location_cache');
+        if (cachedData) {
+          setLocation(JSON.parse(cachedData));
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000 // Accept positions up to 1 minute old
+      }
+    );
   }, [fetchLocationData]);
 
   useEffect(() => {
@@ -156,8 +162,12 @@ export function useGPSLocation() {
       if (error.code === 1) { // PERMISSION_DENIED
         setPermissionDenied(true);
         setError('Location permission denied. Please enable location services.');
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        setError('Location information is unavailable.');
+      } else if (error.code === 3) { // TIMEOUT
+        setError('The request to get location timed out.');
       } else {
-        setError(`Geolocation error: ${error.message}`);
+        setError('An unknown error occurred while getting location.');
       }
       setLoading(false);
       

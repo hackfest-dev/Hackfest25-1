@@ -130,7 +130,9 @@ export default function DashboardPage() {
   // Update time series data when converted transactions change
   useEffect(() => {
     if (convertedTransactions.length > 0) {
+      console.log('Creating time series data from converted transactions:', convertedTransactions.length);
       const timeSeries = createTimeSeriesData(convertedTransactions);
+      console.log('Generated time series data:', timeSeries);
       setTimeSeriesData(timeSeries);
     }
   }, [convertedTransactions]);
@@ -365,22 +367,27 @@ export default function DashboardPage() {
 
 // Process transactions for time series chart
 const createTimeSeriesData = (transactions: Transaction[]) => {
+  console.log('Starting to process time series data');
+  
   // Group transactions by date
-  const groupedByDate: Record<string, { income: number; expenses: number }> = {};
+  const groupedByDate: Record<string, { Income: number; Expenses: number }> = {};
   
   // Sort transactions by date first
   const sortedTransactions = [...transactions].sort((a, b) => 
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
   
+  console.log('Sorted transactions:', sortedTransactions.length);
+  
   // Process each transaction
   sortedTransactions.forEach(transaction => {
     // Format the date consistently
-    const date = new Date(transaction.date).toISOString().split('T')[0];
+    const date = new Date(transaction.date);
+    const dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     
     // Initialize the date entry if it doesn't exist
-    if (!groupedByDate[date]) {
-      groupedByDate[date] = { income: 0, expenses: 0 };
+    if (!groupedByDate[dateKey]) {
+      groupedByDate[dateKey] = { Income: 0, Expenses: 0 };
     }
     
     // Convert the transaction amount to the user's base currency
@@ -388,22 +395,28 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
     
     // Add the amount to the appropriate category based on amount sign
     if (convertedAmount > 0) {
-      groupedByDate[date].income += convertedAmount;
+      groupedByDate[dateKey].Income += Math.abs(convertedAmount);
     } else {
-      groupedByDate[date].expenses += convertedAmount;
+      groupedByDate[dateKey].Expenses += Math.abs(convertedAmount); // Store expenses as positive values
     }
   });
   
+  console.log('Grouped by date:', groupedByDate);
+  
   // Convert the grouped data to the format needed for the chart
   const chartData = Object.entries(groupedByDate)
-    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+    .sort(([a, _], [b, __]) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateA.getTime() - dateB.getTime();
+    })
     .map(([date, values]) => ({
       date,
-      income: parseFloat(values.income.toFixed(2)),
-      expenses: Math.abs(parseFloat(values.expenses.toFixed(2))), // Make expenses positive for better visualization
-      total: parseFloat((values.income + values.expenses).toFixed(2))
+      Income: parseFloat(values.Income.toFixed(2)),
+      Expenses: parseFloat(values.Expenses.toFixed(2))
     }));
   
+  console.log('Final chart data:', chartData);
   return chartData;
 };
 
@@ -745,6 +758,7 @@ const createTimeSeriesData = (transactions: Transaction[]) => {
               </div>
             ) : (
               <div className="h-full w-full">
+                {console.log('Rendering SpendingChart with data:', timeSeriesData)}
                 <SpendingChart 
                   data={timeSeriesData}
                   baseCurrency={baseCurrency} 
