@@ -366,18 +366,28 @@ export default function RelocationPlanner() {
       setBaseCurrency(settings.baseCurrency);
     }
     
-    loadUserPreferences();
-    detectLocation();
+    // Wrap these in try-catch to prevent build failures
+    try {
+      loadUserPreferences();
+      detectLocation();
+    } catch (error) {
+      console.error('Error during initialization:', error);
+    }
   }, [user, settings]);
   
-  // Detect user's location
+  // Detect user's location with error handling
   const detectLocation = async () => {
     try {
       const response = await fetch('/api/geolocation');
+      if (!response.ok) {
+        throw new Error('Failed to fetch geolocation');
+      }
       const data = await response.json();
       
       if (data.city && data.country) {
         setCurrentLocation(`${data.city}, ${data.country}`);
+      } else {
+        setCurrentLocation("Unknown location");
       }
     } catch (error) {
       console.error('Error detecting location:', error);
@@ -522,7 +532,7 @@ export default function RelocationPlanner() {
     generateComparisonData();
   };
   
-  // Generate AI recommendations
+  // Generate AI recommendations with better error handling
   const generateAIRecommendations = async (force: boolean = false) => {
     if (budget <= 0) {
       toast({
@@ -536,7 +546,7 @@ export default function RelocationPlanner() {
     if (!currentLocation) {
       toast({
         title: "Location Required",
-        description: "Please wait for your current location to be detected or enter it manually",
+        description: "Please enter your current location",
         variant: "destructive"
       });
       return;
@@ -577,92 +587,79 @@ ${context.additionalRequirements ? `- Additional Requirements: ${context.additio
 
 For each recommended city, calculate and provide:
 1. Monthly cost estimate in ${baseCurrency} with detailed breakdown
-2. Savings comparison:
-   - Research typical costs in ${context.currentLocation} for baseline
-   - Calculate percentage difference in total monthly costs
-   - Express as "X% lower" or "X% higher" compared to ${context.currentLocation}
-   - Example: if new city costs $1500 and ${context.currentLocation} costs $2000, savings would be "25% lower"
-3. Lifestyle match percentage (0-100) based on how well it matches the preferences
-4. Key reasons why this city matches the preferences
-5. Important details about:
-   - Housing quality and options
-   - Food scene and costs
-   - Transportation system
-   - Healthcare standards
-   - Internet infrastructure
-   - Safety statistics
-   - Overall quality of life
+2. Savings comparison vs ${context.currentLocation}
+3. Lifestyle match percentage (0-100)
+4. Key reasons for recommendation
+5. Important details about living conditions
 
-IMPORTANT: Respond with raw JSON only, no markdown formatting or code blocks. The response should be a single JSON object with this exact structure:
+IMPORTANT: Respond with raw JSON only, no markdown. Format:
 {
   "recommendations": [
     {
       "city": "string",
       "country": "string",
       "monthlyEstimate": number,
-      "savingsEstimate": number (positive for savings, negative for higher cost),
-      "lifestyleMatch": number (0-100),
+      "savingsEstimate": number,
+      "lifestyleMatch": number,
       "reason": "string",
       "details": ["string"]
     }
   ]
 }
 
-Provide exactly 3 best matching cities based on the given criteria.`;
+Provide exactly 3 best matching cities.`;
 
       // Call Gemini API
       const aiResponse = await callGeminiApi(prompt);
+      const parsedResponse = JSON.parse(aiResponse);
       
-      try {
-        const parsedResponse = JSON.parse(aiResponse);
-        
-        if (Array.isArray(parsedResponse.recommendations)) {
-          // Add unique IDs and validate/fix savings estimates
-          const recommendationsWithIds = parsedResponse.recommendations.map((rec: any) => {
-            // Ensure savings estimate is a number and makes sense
-            let savingsEstimate = Number(rec.savingsEstimate);
-            if (isNaN(savingsEstimate) || savingsEstimate < -100 || savingsEstimate > 100) {
-              // If invalid, calculate a rough estimate based on monthly costs
-              const currentLocationCost = budget; // Use current budget as baseline
-              const newLocationCost = rec.monthlyEstimate;
-              savingsEstimate = Math.round(((currentLocationCost - newLocationCost) / currentLocationCost) * 100);
-            }
+      if (!parsedResponse.recommendations || !Array.isArray(parsedResponse.recommendations)) {
+        throw new Error("Invalid response format from AI");
+      }
 
-            return {
-              ...rec,
-              id: Math.random().toString(36).substr(2, 9),
-              savingsEstimate: savingsEstimate
-            };
-          });
-          
-          setAiRecommendations(recommendationsWithIds);
-          
-          // Generate comparison data for the recommended cities
-          await generateComparisonData();
-          
-          toast({
-            title: "Recommendations Ready",
-            description: `Found ${recommendationsWithIds.length} cities matching your criteria.`,
-            variant: "default"
-          });
-        } else {
-          throw new Error("Invalid response format from AI");
+      // Add unique IDs and validate/fix savings estimates
+      const recommendationsWithIds = parsedResponse.recommendations.map((rec: any) => {
+        let savingsEstimate = Number(rec.savingsEstimate);
+        if (isNaN(savingsEstimate) || savingsEstimate < -100 || savingsEstimate > 100) {
+          const currentLocationCost = budget;
+          const newLocationCost = rec.monthlyEstimate;
+          savingsEstimate = Math.round(((currentLocationCost - newLocationCost) / currentLocationCost) * 100);
         }
-      } catch (parseError) {
-        console.error("Error parsing AI response:", parseError);
+
+        return {
+          ...rec,
+          id: Math.random().toString(36).substr(2, 9),
+          savingsEstimate: savingsEstimate
+        };
+      });
+      
+      setAiRecommendations(recommendationsWithIds);
+      
+      // Generate comparison data for the recommended cities
+      try {
+        await generateComparisonData();
+      } catch (compareError) {
+        console.error("Error generating comparison data:", compareError);
         toast({
-          title: "Error",
-          description: "Failed to process AI recommendations. Please try again.",
-          variant: "destructive"
+          title: "Warning",
+          description: "City comparison data may be incomplete",
+          variant: "default"
         });
       }
+      
+      toast({
+        title: "Recommendations Ready",
+        description: `Found ${recommendationsWithIds.length} cities matching your criteria.`,
+        variant: "default"
+      });
     } catch (error) {
       console.error("Error generating recommendations:", error);
       toast({
         title: "Error",
-        description: "Failed to generate recommendations. Please try again.",
+        description: "Could not generate recommendations. Please try again or adjust your criteria.",
         variant: "destructive"
       });
+      setAiRecommendations([]);
     } finally {
       setLoadingAI(false);
     }
@@ -824,15 +821,15 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-6 border-b">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Button
+          <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/dashboard')}
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-            >
+          >
               <ArrowLeftCircle className="h-4 w-4" />
               Dashboard
-            </Button>
+          </Button>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Relocation Planner</h1>
           <p className="text-sm text-muted-foreground">
@@ -860,11 +857,11 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
           </HoverCard>
         </div>
       </div>
-
+      
       {isLoading ? (
         <div className="flex items-center justify-center h-[400px]">
           <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">Loading your preferences...</p>
           </div>
         </div>
@@ -874,44 +871,44 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
             <TabsTrigger value="preferences" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
               <span>Preferences</span>
-            </TabsTrigger>
+              </TabsTrigger>
             <TabsTrigger value="recommendations" className="flex items-center gap-2">
               <Lightbulb className="h-4 w-4" />
               <span>Cities</span>
-            </TabsTrigger>
+              </TabsTrigger>
             <TabsTrigger value="compare" className="flex items-center gap-2">
               <BarChart className="h-4 w-4" />
               <span>Compare</span>
-            </TabsTrigger>
-          </TabsList>
-
+              </TabsTrigger>
+            </TabsList>
+            
           {/* Preferences Tab - Enhanced */}
           <TabsContent value="preferences">
-            <Card>
-              <CardHeader>
+              <Card>
+                <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                   <Sliders className="h-5 w-5 text-primary" />
                   Your Relocation Preferences
                 </CardTitle>
-                <CardDescription>
-                  Set your budget and preferences to get personalized city recommendations
-                </CardDescription>
-              </CardHeader>
+                  <CardDescription>
+                    Set your budget and preferences to get personalized city recommendations
+                  </CardDescription>
+                </CardHeader>
               <CardContent className="space-y-8">
                 {/* Budget Section - Enhanced */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium">Monthly Budget</h3>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
+                            <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
                         value={budget}
-                        onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value) || 0))}
+                                  onChange={(e) => setBudget(Math.max(0, parseInt(e.target.value) || 0))}
                         className="w-[120px] text-right"
-                      />
-                      <span className="text-sm font-medium">{baseCurrency}</span>
-                    </div>
-                  </div>
+                                />
+                              <span className="text-sm font-medium">{baseCurrency}</span>
+                            </div>
+                          </div>
                   <div className="space-y-2">
                     <Slider
                       value={[budget]}
@@ -925,123 +922,123 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
                       <span>{formatCurrency(500, baseCurrency)}</span>
                       <span>{formatCurrency(2500, baseCurrency)}</span>
                       <span>{formatCurrency(5000, baseCurrency)}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
+                    
                 {/* Features Section - Enhanced */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Must-Have Features</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {featureOptions.map(feature => (
-                      <Badge
-                        key={feature.value}
-                        variant={mustHaveFeatures.includes(feature.value) ? "default" : "outline"}
+                      <div className="flex flex-wrap gap-2">
+                        {featureOptions.map(feature => (
+                          <Badge 
+                            key={feature.value}
+                            variant={mustHaveFeatures.includes(feature.value) ? "default" : "outline"}
                         className="cursor-pointer transition-colors"
-                        onClick={() => toggleFeature(feature.value)}
-                      >
-                        {feature.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
+                            onClick={() => toggleFeature(feature.value)}
+                          >
+                            {feature.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    
                 {/* Regions Section - Enhanced */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Preferred Regions</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {regionOptions.map(region => (
-                      <Badge
-                        key={region.value}
-                        variant={preferredRegions.includes(region.value) ? "default" : "outline"}
+                      <div className="flex flex-wrap gap-2">
+                        {regionOptions.map(region => (
+                          <Badge 
+                            key={region.value}
+                            variant={preferredRegions.includes(region.value) ? "default" : "outline"}
                         className="cursor-pointer transition-colors"
-                        onClick={() => toggleRegion(region.value)}
-                      >
-                        {region.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
+                            onClick={() => toggleRegion(region.value)}
+                          >
+                            {region.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    
                 {/* Lifestyle Section - Enhanced */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Lifestyle Preferences</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {lifestyleOptions.map(lifestyle => (
-                      <Badge
-                        key={lifestyle.value}
-                        variant={lifestylePreferences.includes(lifestyle.value) ? "default" : "outline"}
+                      <div className="flex flex-wrap gap-2">
+                        {lifestyleOptions.map(lifestyle => (
+                          <Badge 
+                            key={lifestyle.value}
+                            variant={lifestylePreferences.includes(lifestyle.value) ? "default" : "outline"}
                         className="cursor-pointer transition-colors"
-                        onClick={() => toggleLifestyle(lifestyle.value)}
-                      >
-                        {lifestyle.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
+                            onClick={() => toggleLifestyle(lifestyle.value)}
+                          >
+                            {lifestyle.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    
                 <div className="flex justify-end pt-4">
-                  <Button
-                    onClick={saveUserPreferences}
-                    disabled={isLoading}
+                      <Button 
+                        onClick={saveUserPreferences}
+                        disabled={isLoading}
                     className="flex items-center gap-2"
-                  >
-                    {isLoading ? (
-                      <>
+                      >
+                        {isLoading ? (
+                          <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Saving...</span>
-                      </>
-                    ) : (
+                          </>
+                        ) : (
                       <>
                         <Save className="h-4 w-4" />
                         <span>Save Preferences</span>
                       </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
+                        )}
+                      </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
           {/* Recommendations Tab - Enhanced */}
           <TabsContent value="recommendations">
-            <Card>
+              <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="text-lg font-semibold">AI City Recommendations</CardTitle>
-                  <CardDescription>
+                      <CardDescription>
                     Personalized city suggestions based on your preferences
-                  </CardDescription>
-                </div>
-                <Button
+                      </CardDescription>
+                    </div>
+                    <Button 
                   onClick={() => generateAIRecommendations(true)}
-                  disabled={loadingAI}
-                  className="flex items-center gap-2"
-                >
-                  {loadingAI ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      disabled={loadingAI}
+                      className="flex items-center gap-2"
+                    >
+                      {loadingAI ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Analyzing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          <Brain className="h-4 w-4" />
                       <span>Generate</span>
-                    </>
-                  )}
-                </Button>
+                        </>
+                      )}
+                    </Button>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex">
-                    <Input
-                      placeholder="Additional preferences (e.g., 'I want a beach city with good internet')"
+                      <Input 
+                        placeholder="Additional preferences (e.g., 'I want a beach city with good internet')" 
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
-                      className="flex-1"
-                      disabled={loadingAI}
-                    />
-                  </div>
+                        className="flex-1"
+                        disabled={loadingAI}
+                      />
+                    </div>
 
                   {aiRecommendations.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-[300px] text-center">
@@ -1064,9 +1061,9 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
                               <HoverCard>
                                 <HoverCardTrigger asChild>
                                   <div className="flex items-center gap-1 text-primary cursor-help">
-                                    <Sparkles className="h-4 w-4" />
-                                    <span className="font-bold">{rec.lifestyleMatch}%</span>
-                                  </div>
+                                <Sparkles className="h-4 w-4" />
+                                <span className="font-bold">{rec.lifestyleMatch}%</span>
+                              </div>
                                 </HoverCardTrigger>
                                 <HoverCardContent>
                                   <p className="text-sm">Lifestyle match score based on your preferences</p>
@@ -1075,43 +1072,43 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
                                 <h4 className="text-sm font-medium">Cost of Living</h4>
                                 <Badge variant="outline">
                                   {rec.savingsEstimate}% vs current
-                                </Badge>
-                              </div>
+                                  </Badge>
+                                </div>
                               <Progress 
                                 value={Math.abs(rec.savingsEstimate)} 
                                 className={`h-2 ${rec.savingsEstimate < 0 ? "bg-red-500" : "bg-green-500"}`}
                               />
-                            </div>
-
+                              </div>
+                              
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">Monthly Estimate:</span>
+                                <span className="text-sm font-medium">Monthly Estimate:</span>
                               <Badge variant="secondary" className="font-mono">
                                 {formatCurrency(rec.monthlyEstimate, baseCurrency)}
-                              </Badge>
-                            </div>
-
-                            <div className="space-y-2">
+                                </Badge>
+                              </div>
+                              
+                                <div className="space-y-2">
                               <h4 className="text-sm font-medium">Key Benefits</h4>
-                              {rec.details.map((detail, i) => (
-                                <div key={i} className="flex items-start gap-2">
+                                  {rec.details.map((detail, i) => (
+                                    <div key={i} className="flex items-start gap-2">
                                   <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                  <p className="text-sm text-muted-foreground">{detail}</p>
-                                </div>
-                              ))}
-                            </div>
+                                      <p className="text-sm text-muted-foreground">{detail}</p>
+                                    </div>
+                                  ))}
+                              </div>
 
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => saveCity(rec)}
-                              disabled={savedCities.some(city => city.city === rec.city)}
-                            >
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="w-full"
+                                  onClick={() => saveCity(rec)}
+                                  disabled={savedCities.some(city => city.city === rec.city)}
+                                >
                               {savedCities.some(city => city.city === rec.city) ? (
                                 <span className="flex items-center gap-2">
                                   <Check className="h-4 w-4" />
@@ -1123,81 +1120,81 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
                                   Save to Compare
                                 </span>
                               )}
-                            </Button>
+                                </Button>
                           </CardContent>
                         </Card>
                       ))}
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
           {/* Compare Tab - Enhanced */}
           <TabsContent value="compare">
-            {savedCities.length === 0 ? (
-              <Card>
+              {savedCities.length === 0 ? (
+                <Card>
                 <CardContent className="flex flex-col items-center justify-center h-[400px] text-center">
                   <BarChart className="h-12 w-12 text-primary/20 mb-4" />
                   <p className="text-lg font-medium">No cities saved yet</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     Generate recommendations and save cities to compare them
-                  </p>
-                  <Button
-                    variant="outline"
+                    </p>
+                    <Button 
+                      variant="outline"
                     size="sm"
                     className="mt-4"
                     onClick={() => setActiveTab("recommendations")}
-                  >
+                    >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Get Recommendations
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
               <div className="space-y-6">
                 {/* Saved Cities Grid */}
-                <Card>
-                  <CardHeader>
+                  <Card>
+                    <CardHeader>
                     <CardTitle className="text-lg font-semibold">Saved Cities</CardTitle>
                     <CardDescription>Compare your shortlisted cities</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {savedCities.map(city => (
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {savedCities.map(city => (
                         <Card key={city.city} className="relative">
-                          <Button
-                            variant="ghost"
+                                <Button 
+                                  variant="ghost" 
                             size="icon"
                             className="absolute right-2 top-2 h-6 w-6"
-                            onClick={() => removeCity(city.city)}
-                          >
+                                  onClick={() => removeCity(city.city)}
+                                >
                             <X className="h-4 w-4" />
-                          </Button>
+                                </Button>
                           <CardHeader className="pb-2">
                             <CardTitle className="text-base">{city.city}</CardTitle>
                             <CardDescription>{city.country}</CardDescription>
-                          </CardHeader>
+                            </CardHeader>
                           <CardContent>
                             <div className="space-y-2">
                               <div className="text-xl font-bold">
                                 {formatCurrency(city.monthlyEstimate, baseCurrency)}
                               </div>
                               <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
-                                {city.savingsEstimate}% savings
-                              </Badge>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
+                                  {city.savingsEstimate}% savings
+                                </Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
                 {/* Cost Comparison Chart */}
                 <Card>
-                  <CardHeader>
+                    <CardHeader>
                     <CardTitle className="text-lg font-semibold">Cost Comparison</CardTitle>
                     <CardDescription>Monthly expenses breakdown</CardDescription>
                   </CardHeader>
@@ -1226,22 +1223,22 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
                     <CardDescription>Your selected cities on the world map</CardDescription>
                   </CardHeader>
                   <CardContent className="h-[400px]">
-                    <LocationHeatMap
-                      cities={savedCities.map(city => ({
-                        name: city.city,
-                        country: city.country,
-                        coordinates: getCityCoordinates(city.city, city.country),
-                        cost: city.monthlyEstimate,
-                        currency: baseCurrency
-                      }))}
-                      baseCurrency={baseCurrency}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                        <LocationHeatMap 
+                          cities={savedCities.map(city => ({
+                            name: city.city,
+                            country: city.country,
+                            coordinates: getCityCoordinates(city.city, city.country),
+                            cost: city.monthlyEstimate,
+                            currency: baseCurrency
+                          }))}
+                          baseCurrency={baseCurrency}
+                        />
+                    </CardContent>
+                  </Card>
+                        </div>
+              )}
+            </TabsContent>
+          </Tabs>
       )}
     </div>
   );
