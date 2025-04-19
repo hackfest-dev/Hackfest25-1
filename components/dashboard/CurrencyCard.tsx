@@ -21,7 +21,11 @@ export function CurrencyCard() {
           transition={{ duration: 0.5 }}
           className="pt-6 flex flex-col items-center"
         >
-          <CurrencyRotator size="lg" className="mb-6" />
+          <CurrencyRotator 
+            size="lg" 
+            className="mb-6" 
+            values={["$100.00", "€85.00", "£75.00", "¥11,000"]}
+          />
           
           <div className="w-full mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
             <div className="grid grid-cols-2 gap-4 text-center">

@@ -183,7 +183,11 @@ export default function LandingPage() {
           
           {/* Currency Rotator Background */}
           <div className="absolute inset-0 flex items-center justify-center opacity-30 scale-125 pointer-events-none z-0">
-            <CurrencyRotator size="lg" showInfo={false} />
+            <CurrencyRotator 
+              size="lg" 
+              showInfo={false} 
+              values={["$100.00", "€85.00", "£75.00", "¥11,000"]} 
+            />
           </div>
 
           {/* Hero Content */}
