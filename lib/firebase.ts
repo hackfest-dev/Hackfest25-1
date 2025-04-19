@@ -12,22 +12,36 @@ import {
   connectAuthEmulator
 } from "firebase/auth";
 
-// Direct Firebase configuration
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyBPYtwrJCx5_1NcqFZjy2bYN_sWeF05xLA",
-  authDomain: "spendx-dev.firebaseapp.com",
-  projectId: "spendx-dev",
-  storageBucket: "spendx-dev.firebasestorage.app",
-  messagingSenderId: "720137835192",
-  appId: "1:720137835192:web:120a2eefc77cda5e571a4d",
-  measurementId: "G-NDKTV2LPWS"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-console.log("Initializing Firebase with project:", firebaseConfig.projectId);
+// Initialize Firebase only if config is available
+let app;
+let auth;
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+if (typeof window !== 'undefined' && 
+    firebaseConfig.apiKey && 
+    firebaseConfig.authDomain && 
+    firebaseConfig.projectId) {
+  try {
+    console.log("Initializing Firebase with project:", firebaseConfig.projectId);
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    auth.useDeviceLanguage();
+  } catch (error) {
+    console.error("Error initializing Firebase:", error);
+  }
+} else {
+  console.warn("Firebase configuration is incomplete. Some features may not work.");
+}
 
 // Configure the auth instance
 auth.useDeviceLanguage();
