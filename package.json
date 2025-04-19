@@ -1,5 +1,5 @@
 {
-  "name": "spendx",
+  "name": "spendX",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -67,6 +67,7 @@
     "recharts": "latest",
     "sonner": "^1.7.1",
     "spendx": "file:",
+    "spendX": "file:",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
