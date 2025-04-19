@@ -140,7 +140,23 @@ const callGeminiApi = async (prompt: string): Promise<string> => {
     const data = await response.json();
     
     if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
+      const rawText = data.candidates[0].content.parts[0].text;
+      
+      // Extract JSON from the response
+      // First, try to find JSON within code blocks
+      const codeBlockMatch = rawText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        return codeBlockMatch[1];
+      }
+      
+      // If no code block, try to find JSON directly
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return jsonMatch[0];
+      }
+      
+      // If still no JSON found, throw error
+      throw new Error("Could not find valid JSON in the response");
     } else {
       throw new Error("Unexpected response structure from Gemini API");
     }
@@ -465,7 +481,20 @@ export default function RelocationPlanner() {
   // Generate AI recommendations
   const generateAIRecommendations = async () => {
     if (budget <= 0) {
-      alert("Please set a valid budget first");
+      toast({
+        title: "Invalid Budget",
+        description: "Please set a valid budget first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!currentLocation) {
+      toast({
+        title: "Location Required",
+        description: "Please wait for your current location to be detected or enter it manually",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -473,256 +502,262 @@ export default function RelocationPlanner() {
     setAiRecommendations([]);
     
     try {
-      // Build the prompt based on user preferences
-      const featuresText = mustHaveFeatures.length > 0 
-        ? `Must have features: ${mustHaveFeatures.join(', ')}`
-        : "";
-        
-      const regionsText = preferredRegions.length > 0
-        ? `Preferred regions: ${preferredRegions.join(', ')}`
-        : "";
-        
-      const lifestyleText = lifestylePreferences.length > 0
-        ? `Lifestyle preferences: ${lifestylePreferences.join(', ')}`
-        : "";
-      
-      const customPrompt = aiPrompt ? `Additional requirements: ${aiPrompt}` : "";
-      
-      const prompt = `As an AI relocation advisor for digital nomads, recommend 3 cities that would be good matches based on these criteria:
+      // Build the context for the AI
+      const context = {
+        budget: formatCurrency(budget, baseCurrency),
+        currentLocation,
+        mustHaveFeatures: mustHaveFeatures.length > 0 ? mustHaveFeatures : [],
+        preferredRegions: preferredRegions.length > 0 ? preferredRegions : [],
+        lifestylePreferences: lifestylePreferences.length > 0 ? lifestylePreferences : [],
+        additionalRequirements: aiPrompt || ""
+      };
 
-Budget: ${formatCurrency(budget, baseCurrency)} per month
-Current location: ${currentLocation}
-${featuresText}
-${regionsText}
-${lifestyleText}
-${customPrompt}
+      const prompt = `As an expert relocation advisor for digital nomads, analyze the following preferences and provide detailed city recommendations:
 
-For each recommendation, provide:
-1. City name
-2. Country
-3. Reason why it's a good match for a digital nomad with these preferences
-4. Estimated savings percentage compared to a major Western city
-5. A lifestyle match percentage (how well it matches the preferences)
-6. 5 specific details about why this location would be good
-7. Estimate the monthly expense in ${baseCurrency}
+PREFERENCES:
+- Monthly Budget: ${context.budget}
+- Current Location: ${context.currentLocation}
+${context.mustHaveFeatures.length > 0 ? `- Must Have Features: ${context.mustHaveFeatures.join(', ')}` : ''}
+${context.preferredRegions.length > 0 ? `- Preferred Regions: ${context.preferredRegions.join(', ')}` : ''}
+${context.lifestylePreferences.length > 0 ? `- Lifestyle Preferences: ${context.lifestylePreferences.join(', ')}` : ''}
+${context.additionalRequirements ? `- Additional Requirements: ${context.additionalRequirements}` : ''}
 
-Format the response in valid JSON format as an array of objects with these exact properties:
-[
-  {
-    "id": "rec1",
-    "city": "City Name",
-    "country": "Country Name",
-    "reason": "Brief reason why it's a good match",
-    "savingsEstimate": 25, (number representing percentage),
-    "lifestyleMatch": 85, (number representing percentage),
-    "monthlyEstimate": 1500, (number in ${baseCurrency}),
-    "details": [
-      "detail 1",
-      "detail 2",
-      "detail 3",
-      "detail 4",
-      "detail 5"
-    ]
-  },
-  ...
-]`;
+For each recommended city, calculate and provide:
+1. Monthly cost estimate in ${baseCurrency} with detailed breakdown
+2. Savings comparison:
+   - Research typical costs in ${context.currentLocation} for baseline
+   - Calculate percentage difference in total monthly costs
+   - Express as "X% lower" or "X% higher" compared to ${context.currentLocation}
+   - Example: if new city costs $1500 and ${context.currentLocation} costs $2000, savings would be "25% lower"
+3. Lifestyle match percentage (0-100) based on how well it matches the preferences
+4. Key reasons why this city matches the preferences
+5. Important details about:
+   - Housing quality and options
+   - Food scene and costs
+   - Transportation system
+   - Healthcare standards
+   - Internet infrastructure
+   - Safety statistics
+   - Overall quality of life
+
+IMPORTANT: Respond with raw JSON only, no markdown formatting or code blocks. The response should be a single JSON object with this exact structure:
+{
+  "recommendations": [
+    {
+      "city": "string",
+      "country": "string",
+      "monthlyEstimate": number,
+      "savingsEstimate": number (positive for savings, negative for higher cost),
+      "lifestyleMatch": number (0-100),
+      "reason": "string",
+      "details": ["string"]
+    }
+  ]
+}
+
+Provide exactly 3 best matching cities based on the given criteria.`;
 
       // Call Gemini API
-      const geminiResponse = await callGeminiApi(prompt);
-      
-      // Parse JSON response
-      let recommendationData: AIRecommendation[] = [];
+      const aiResponse = await callGeminiApi(prompt);
       
       try {
-        // Attempt to extract valid JSON from the response
-        const jsonMatch = geminiResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
-        if (jsonMatch) {
-          recommendationData = JSON.parse(jsonMatch[0]);
+        const parsedResponse = JSON.parse(aiResponse);
+        
+        if (Array.isArray(parsedResponse.recommendations)) {
+          // Add unique IDs and validate/fix savings estimates
+          const recommendationsWithIds = parsedResponse.recommendations.map((rec: any) => {
+            // Ensure savings estimate is a number and makes sense
+            let savingsEstimate = Number(rec.savingsEstimate);
+            if (isNaN(savingsEstimate) || savingsEstimate < -100 || savingsEstimate > 100) {
+              // If invalid, calculate a rough estimate based on monthly costs
+              const currentLocationCost = budget; // Use current budget as baseline
+              const newLocationCost = rec.monthlyEstimate;
+              savingsEstimate = Math.round(((currentLocationCost - newLocationCost) / currentLocationCost) * 100);
+            }
+
+            return {
+              ...rec,
+              id: Math.random().toString(36).substr(2, 9),
+              savingsEstimate: savingsEstimate
+            };
+          });
+          
+          setAiRecommendations(recommendationsWithIds);
+          
+          // Generate comparison data for the recommended cities
+          await generateComparisonData();
+          
+          toast({
+            title: "Recommendations Ready",
+            description: `Found ${recommendationsWithIds.length} cities matching your criteria.`,
+            variant: "default"
+          });
         } else {
-          throw new Error("Could not extract JSON from response");
+          throw new Error("Invalid response format from AI");
         }
       } catch (parseError) {
-        console.error("Error parsing Gemini API response:", parseError);
-        console.log("Raw AI response:", geminiResponse);
-        alert("The AI provided a response but it wasn't in the expected format. Please try again.");
-        throw new Error("Failed to parse AI response");
+        console.error("Error parsing AI response:", parseError);
+        toast({
+          title: "Error",
+          description: "Failed to process AI recommendations. Please try again.",
+          variant: "destructive"
+        });
       }
-      
-      setAiRecommendations(recommendationData);
-      
-      // Generate comparison data with both saved cities and new recommendations
-      const allCities = [...savedCities];
-      recommendationData.forEach(rec => {
-        if (!allCities.some(city => city.city === rec.city)) {
-          allCities.push({
-            city: rec.city,
-            country: rec.country,
-            monthlyEstimate: rec.monthlyEstimate,
-            savingsEstimate: rec.savingsEstimate,
-            notes: ""
-          });
-        }
-      });
-      
-      generateComparisonData();
-      
     } catch (error) {
-      console.error("Error generating AI recommendations:", error);
+      console.error("Error generating recommendations:", error);
       toast({
         title: "Error",
-        description: "An error occurred when calling the Gemini API. Please try again.",
+        description: "Failed to generate recommendations. Please try again.",
         variant: "destructive"
       });
     } finally {
       setLoadingAI(false);
-      // Reset the prompt after submission
-      setAiPrompt("");
     }
   };
   
-  // Generate comparison data for charts
+  // Generate comparison data for cities
   const generateComparisonData = async () => {
+    if (!savedCities.length && !aiRecommendations.length) return;
+
     setIsLoading(true);
-    
-    if (savedCities.length === 0) {
-      toast({
-        title: "No cities saved",
-        description: "Please save some cities to compare first.",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-      return;
-    }
-    
+
     try {
-      // Fetch cost data for each city
-      const validCities: SavedCity[] = [];
-      const validCostData: CityData[] = [];
-      const validExchangeRates: Record<string, number> = {};
-      
-      // First, get the exchange rates for currency conversion
-      const exchangeRatesResponse = await axios.get(`/api/exchange-rates?base=${baseCurrency}`);
-      const exchangeRates: Record<string, number> = exchangeRatesResponse.data.rates;
-      
-      // Add base currency rate
-      exchangeRates[baseCurrency] = 1;
-      
-      for (const city of savedCities) {
-        try {
-          const response = await axios.get(`/api/city-cost?city=${encodeURIComponent(city.city)}&country=${encodeURIComponent(city.country)}`);
-          const cityData = response.data as CityData;
-          
-          // Track valid city and its data
-          validCities.push(city);
-          validCostData.push(cityData);
-          
-          // Store the currency for this city
-          validExchangeRates[city.city] = exchangeRates[cityData.currency] || 1;
-        } catch (error) {
-          console.error(`Error fetching data for ${city.city}:`, error);
-        }
-      }
-      
-      if (validCities.length === 0) {
-        throw new Error("Could not fetch data for any of the selected cities");
-      }
-      
-      // Calculate monthly totals for bar chart
-      const monthlyTotals = validCities.map((city, index) => {
-        const costData = validCostData[index];
-        const exchangeRate = validExchangeRates[city.city];
-        const originalCurrency = costData.currency;
-        
-        // Sum all expenses in the city's original currency
-        const totalInOriginalCurrency = 
-          costData.categories.housing.monthlyRent + 
-          costData.categories.housing.utilities +
-          costData.categories.food.groceries + 
-          costData.categories.food.restaurants +
-          costData.categories.transportation.publicTransport + 
-          costData.categories.transportation.taxi +
-          costData.categories.lifestyle.fitness + 
-          costData.categories.lifestyle.entertainment +
-          costData.categories.healthcare.doctor + 
-          costData.categories.healthcare.dentist;
-          
-        // Convert to base currency
-        const totalInBaseCurrency = totalInOriginalCurrency / exchangeRate;
-        
-        return {
-          name: city.city,
-          value: Math.round(totalInBaseCurrency),
-          fill: city.city === currentLocation ? "#8884d8" : getRandomColor(index),
-          originalValue: totalInOriginalCurrency,
-          originalCurrency: originalCurrency
-        };
-      });
-      
-      setMonthlyTotals(monthlyTotals);
-      
-      // Create detailed comparison data
-      const categories = [
-        { name: "Housing", key: "housing" },
-        { name: "Food", key: "food" },
-        { name: "Transportation", key: "transportation" },
-        { name: "Lifestyle", key: "lifestyle" },
-        { name: "Healthcare", key: "healthcare" }
+      const allCities = [
+        ...savedCities,
+        ...aiRecommendations.map(rec => ({
+          city: rec.city,
+          country: rec.country,
+          monthlyEstimate: rec.monthlyEstimate,
+          savingsEstimate: rec.savingsEstimate,
+          notes: ""
+        }))
       ];
+
+      // Remove duplicates
+      const uniqueCities = Array.from(new Set(allCities.map(city => city.city)))
+        .map(cityName => allCities.find(city => city.city === cityName)!);
+
+      const prompt = `As a cost of living expert, provide detailed cost breakdowns for these cities: ${uniqueCities.map(city => `${city.city}, ${city.country}`).join('; ')}.
+
+For each city, provide data in ${baseCurrency}:
+1. Monthly costs:
+- Housing (rent + utilities)
+- Food (groceries + dining)
+- Transportation
+- Healthcare
+- Entertainment
+2. Quality metrics (0-100):
+- Safety
+- Healthcare
+- Climate
+- Pollution
+
+IMPORTANT: Respond with ONLY valid JSON matching this structure:
+{
+  "cities": [
+    {
+      "city": "CityName",
+      "country": "CountryName",
+      "currency": "${baseCurrency}",
+      "categories": {
+        "housing": {"monthlyRent": 1000, "utilities": 100},
+        "food": {"groceries": 400, "restaurants": 300},
+        "transportation": {"publicTransport": 50, "taxi": 100},
+        "lifestyle": {"fitness": 50, "entertainment": 200},
+        "healthcare": {"doctor": 100, "dentist": 150}
+      },
+      "qualityOfLife": {
+        "safety": 85,
+        "healthcare": 80,
+        "climate": 75,
+        "pollution": 20
+      }
+    }
+  ]
+}`;
+
+      // Call Gemini API
+      const aiResponse = await callGeminiApi(prompt);
       
-      const comparisonData = categories.map(category => {
-        const cityData: any = { category: category.name };
+      try {
+        // Clean and validate the response
+        const cleanedResponse = aiResponse.trim()
+          .replace(/```json\s*|\s*```/g, '') // Remove code blocks
+          .replace(/[\u201C\u201D]/g, '"') // Replace smart quotes
+          .replace(/,\s*([}\]])/g, '$1'); // Remove trailing commas
         
-        validCities.forEach((city, index) => {
-          const costData = validCostData[index];
-          const exchangeRate = validExchangeRates[city.city];
-          let total = 0;
-          
-          switch(category.key) {
-            case "housing":
-              total = costData.categories.housing.monthlyRent + costData.categories.housing.utilities;
-              break;
-            case "food":
-              total = costData.categories.food.groceries + costData.categories.food.restaurants;
-              break;
-            case "transportation":
-              total = costData.categories.transportation.publicTransport + costData.categories.transportation.taxi;
-              break;
-            case "lifestyle":
-              total = costData.categories.lifestyle.fitness + costData.categories.lifestyle.entertainment;
-              break;
-            case "healthcare":
-              total = costData.categories.healthcare.doctor + costData.categories.healthcare.dentist;
-              break;
+        let parsedResponse;
+        try {
+          parsedResponse = JSON.parse(cleanedResponse);
+        } catch (parseError) {
+          console.error("Initial parse failed:", parseError);
+          // Try to extract JSON from the response
+          const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsedResponse = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("Could not extract valid JSON from response");
           }
+        }
+
+        if (!parsedResponse?.cities || !Array.isArray(parsedResponse.cities)) {
+          throw new Error("Invalid response structure: missing cities array");
+        }
+
+        // Validate and process the data
+        const chartData = parsedResponse.cities.map((cityData: CityData, index: number) => {
+          // Validate required properties
+          if (!cityData.categories || !cityData.qualityOfLife) {
+            throw new Error(`Missing required data for city ${cityData.city}`);
+          }
+
+          const color = getRandomColor(index);
           
-          // Convert to base currency
-          cityData[city.city] = Math.round(total / exchangeRate);
+          // Calculate total with validation
+          const total = Object.values(cityData.categories).reduce((sum: number, category) => {
+            const categoryValues = Object.values(category as Record<string, number>);
+            if (!categoryValues.every(val => typeof val === 'number')) {
+              throw new Error(`Invalid numeric values in categories for city ${cityData.city}`);
+            }
+            return sum + categoryValues.reduce((catSum, value) => catSum + value, 0);
+          }, 0);
+
+          return {
+            name: uniqueCities[index].city,
+            color,
+            total,
+            ...cityData.categories,
+            qualityMetrics: cityData.qualityOfLife
+          };
         });
-        
-        return cityData;
-      });
-      
-      setCompareData(comparisonData);
 
-      // Update quality of life data
-      const qualityData = validCities.map((city, index) => {
-        const costData = validCostData[index];
-        return {
-          city: city.city,
-          safety: costData.qualityOfLife.safety,
-          healthcare: costData.qualityOfLife.healthcare,
-          climate: costData.qualityOfLife.climate,
-          pollution: costData.qualityOfLife.pollution
-        };
-      });
+        // Update state for different chart types
+        setCompareData(chartData);
+        setMonthlyTotals(chartData.map((city: ChartDataItem) => ({
+          name: city.name,
+          total: city.total,
+          color: city.color
+        })));
+        setQualityData(chartData.map((city: ChartDataItem) => ({
+          name: city.name,
+          city: city.name,
+          metrics: city.qualityMetrics,
+          color: city.color
+        })));
 
-      setQualityData(qualityData);
-      
+      } catch (parseError) {
+        console.error("Error processing cost data:", parseError);
+        toast({
+          title: "Error",
+          description: "Failed to process cost data. Please try generating recommendations again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error("Error generating comparison data:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch city comparison data. Using estimated values.",
+        description: "Failed to generate cost comparisons. Please try again.",
         variant: "destructive"
       });
     } finally {

@@ -3,11 +3,15 @@ import { Progress } from "@/components/ui/progress";
 import { Shield, Heart, Sun, Wind } from "lucide-react";
 
 interface QualityMetric {
+  name: string;
   city: string;
-  safety: number;
-  healthcare: number;
-  climate: number;
-  pollution: number;
+  color: string;
+  metrics: {
+    safety: number;
+    healthcare: number;
+    climate: number;
+    pollution: number;
+  };
 }
 
 interface QualityMetricsProps {
@@ -23,8 +27,8 @@ export function QualityMetrics({ data }: QualityMetricsProps) {
       <CardContent>
         <div className="grid gap-6">
           {data.map((city) => (
-            <div key={city.city} className="space-y-4">
-              <h3 className="text-lg font-semibold">{city.city}</h3>
+            <div key={city.name} className="space-y-4">
+              <h3 className="text-lg font-semibold" style={{ color: city.color }}>{city.name}</h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -32,9 +36,11 @@ export function QualityMetrics({ data }: QualityMetricsProps) {
                       <Shield className="h-4 w-4 text-blue-500" />
                       <span className="text-sm font-medium">Safety</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{city.safety}%</span>
+                    <span className="text-sm text-muted-foreground">{city.metrics.safety}%</span>
                   </div>
-                  <Progress value={city.safety} className="h-2" />
+                  <Progress value={city.metrics.safety} className="h-2" style={{ backgroundColor: `${city.color}20` }}>
+                    <div className="h-full" style={{ backgroundColor: city.color }} />
+                  </Progress>
                 </div>
                 
                 <div>
@@ -43,9 +49,11 @@ export function QualityMetrics({ data }: QualityMetricsProps) {
                       <Heart className="h-4 w-4 text-red-500" />
                       <span className="text-sm font-medium">Healthcare</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{city.healthcare}%</span>
+                    <span className="text-sm text-muted-foreground">{city.metrics.healthcare}%</span>
                   </div>
-                  <Progress value={city.healthcare} className="h-2" />
+                  <Progress value={city.metrics.healthcare} className="h-2" style={{ backgroundColor: `${city.color}20` }}>
+                    <div className="h-full" style={{ backgroundColor: city.color }} />
+                  </Progress>
                 </div>
                 
                 <div>
@@ -54,9 +62,11 @@ export function QualityMetrics({ data }: QualityMetricsProps) {
                       <Sun className="h-4 w-4 text-yellow-500" />
                       <span className="text-sm font-medium">Climate</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{city.climate}%</span>
+                    <span className="text-sm text-muted-foreground">{city.metrics.climate}%</span>
                   </div>
-                  <Progress value={city.climate} className="h-2" />
+                  <Progress value={city.metrics.climate} className="h-2" style={{ backgroundColor: `${city.color}20` }}>
+                    <div className="h-full" style={{ backgroundColor: city.color }} />
+                  </Progress>
                 </div>
                 
                 <div>
@@ -65,9 +75,11 @@ export function QualityMetrics({ data }: QualityMetricsProps) {
                       <Wind className="h-4 w-4 text-green-500" />
                       <span className="text-sm font-medium">Air Quality</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{100 - city.pollution}%</span>
+                    <span className="text-sm text-muted-foreground">{100 - city.metrics.pollution}%</span>
                   </div>
-                  <Progress value={100 - city.pollution} className="h-2" />
+                  <Progress value={100 - city.metrics.pollution} className="h-2" style={{ backgroundColor: `${city.color}20` }}>
+                    <div className="h-full" style={{ backgroundColor: city.color }} />
+                  </Progress>
                 </div>
               </div>
             </div>
