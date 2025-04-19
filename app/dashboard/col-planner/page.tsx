@@ -722,14 +722,14 @@ IMPORTANT: Respond with ONLY valid JSON matching this structure:
             return sum + categoryValues.reduce((catSum, value) => catSum + value, 0);
           }, 0);
 
-          return {
+        return {
             name: uniqueCities[index].city,
             color,
             total,
             ...cityData.categories,
             qualityMetrics: cityData.qualityOfLife
-          };
-        });
+        };
+      });
 
         // Update state for different chart types
         setCompareData(chartData);
