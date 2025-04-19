@@ -158,17 +158,24 @@ export function useGPSLocation() {
     };
 
     const handleError = (error: GeolocationPositionError) => {
-      console.error('Geolocation error:', error);
+      let errorMessage = 'An unknown error occurred while getting location.';
+      
       if (error.code === 1) { // PERMISSION_DENIED
         setPermissionDenied(true);
-        setError('Location permission denied. Please enable location services.');
+        errorMessage = 'Location permission denied. Please enable location services.';
       } else if (error.code === 2) { // POSITION_UNAVAILABLE
-        setError('Location information is unavailable.');
+        errorMessage = 'Location information is unavailable.';
       } else if (error.code === 3) { // TIMEOUT
-        setError('The request to get location timed out.');
-      } else {
-        setError('An unknown error occurred while getting location.');
+        errorMessage = 'The request to get location timed out.';
       }
+      
+      console.error('Geolocation error:', {
+        code: error.code,
+        message: error.message,
+        errorMessage
+      });
+      
+      setError(errorMessage);
       setLoading(false);
       
       // Try to use cached data as fallback

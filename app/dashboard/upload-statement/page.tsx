@@ -27,6 +27,18 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getAllCategories } from "@/lib/transactionCategories";
+
+interface ExtractedTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  isVerified: boolean;
+  category: string;
+}
 
 export default function UploadStatementPage() {
   const { user } = useAuth();
@@ -40,6 +52,9 @@ export default function UploadStatementPage() {
   const [error, setError] = useState<string | null>(null);
   const [conversionStatus, setConversionStatus] = useState<"idle" | "converting" | "success" | "error">("idle");
   const [convertedFileUrl, setConvertedFileUrl] = useState<string | null>(null);
+  const [extractedTransactions, setExtractedTransactions] = useState<ExtractedTransaction[]>([]);
+  const [showVerification, setShowVerification] = useState(false);
+  const categories = getAllCategories();
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -90,11 +105,13 @@ export default function UploadStatementPage() {
 
     setIsUploading(true);
     setError(null);
+    setConversionStatus('converting');
 
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
+          console.log('Starting PDF conversion...');
           const base64Content = e.target?.result?.toString().split(',')[1];
           
           const response = await axios.post('/api/convert-pdf', {
@@ -102,31 +119,66 @@ export default function UploadStatementPage() {
             fileName: file.name
           });
 
+          console.log('PDF conversion response:', response.data);
+
           if (response.data.success) {
             setConvertedFileUrl(response.data.fileUrl);
             setConversionStatus('success');
-            toast({
-              title: "Conversion successful",
-              description: "Your PDF has been converted to XLSX format.",
-            });
+            
+            console.log('Starting data extraction from:', response.data.fileUrl);
+            // Extract data from the converted XLSX
+            try {
+              const extractResponse = await axios.post('/api/extract-statement', {
+                fileUrl: response.data.fileUrl
+              });
+
+              console.log('Extraction response:', extractResponse.data);
+              
+              if (extractResponse.data.success && extractResponse.data.transactions) {
+                const transactions = extractResponse.data.transactions.map((t: any) => ({
+                  ...t,
+                  isVerified: false,
+                  category: 'other'
+                }));
+                console.log('Processed transactions:', transactions);
+                
+                setExtractedTransactions(transactions);
+                setShowVerification(true);
+                toast({
+                  title: "Data extracted successfully",
+                  description: `Found ${transactions.length} transactions. Please verify them.`,
+                });
+              } else {
+                throw new Error(extractResponse.data.error || 'No transactions found in the file');
+              }
+            } catch (extractError) {
+              console.error('Data extraction error:', extractError);
+              setError('Failed to extract data from the converted file. Please check the file format.');
+              toast({
+                variant: "destructive",
+                title: "Extraction failed",
+                description: extractError instanceof Error ? extractError.message : 'Failed to extract data',
+              });
+            }
           } else {
             throw new Error(response.data.error || 'Conversion failed');
           }
         } catch (error) {
-          console.error('Error during conversion:', error);
-          setError('Failed to convert the file. Please try again.');
+          console.error('Error during conversion/extraction:', error);
+          setError('Failed to process the file. Please try again.');
           setConversionStatus('error');
           toast({
             variant: "destructive",
-            title: "Conversion failed",
-            description: "There was an error converting your PDF. Please try again.",
+            title: "Processing failed",
+            description: error instanceof Error ? error.message : 'An error occurred',
           });
         } finally {
           setIsUploading(false);
         }
       };
 
-      reader.onerror = () => {
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error);
         setError('Error reading the file. Please try again.');
         setConversionStatus('error');
         setIsUploading(false);
@@ -134,7 +186,7 @@ export default function UploadStatementPage() {
 
       reader.readAsDataURL(file);
     } catch (error) {
-      console.error('Error during upload:', error);
+      console.error('Upload error:', error);
       setError('An error occurred during the upload. Please try again.');
       setConversionStatus('error');
       setIsUploading(false);
@@ -156,6 +208,56 @@ export default function UploadStatementPage() {
     setConvertedFileUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+  
+  const handleVerificationChange = (index: number, isVerified: boolean) => {
+    setExtractedTransactions(prev => 
+      prev.map((t, i) => i === index ? { ...t, isVerified } : t)
+    );
+  };
+
+  const handleTransactionEdit = (index: number, field: keyof ExtractedTransaction, value: any) => {
+    setExtractedTransactions(prev => 
+      prev.map((t, i) => i === index ? { ...t, [field]: value } : t)
+    );
+  };
+
+  const handleSaveTransactions = async () => {
+    try {
+      const verifiedTransactions = extractedTransactions
+        .filter(t => t.isVerified)
+        .map(t => ({
+          userId: user?.uid,
+          date: new Date(t.date),
+          description: t.description,
+          amount: t.amount,
+          currency: 'INR',
+          category: t.category,
+          location: {
+            country: 'India',
+            city: 'Unknown'
+          }
+        }));
+
+      const response = await axios.post('/api/transactions/bulk', {
+        transactions: verifiedTransactions
+      });
+
+      if (response.data.success) {
+        toast({
+          title: "Transactions saved successfully",
+          description: `${verifiedTransactions.length} transactions have been added to your account.`,
+        });
+        handleReset();
+      }
+    } catch (error) {
+      console.error('Error saving transactions:', error);
+      toast({
+        variant: "destructive",
+        title: "Error saving transactions",
+        description: "Failed to save the transactions. Please try again.",
+      });
     }
   };
   
@@ -304,6 +406,118 @@ export default function UploadStatementPage() {
           </div>
         </CardFooter>
       </Card>
+      
+      {/* Debug information */}
+      <div className="mt-4 text-sm text-muted-foreground">
+        <p>Conversion Status: {conversionStatus}</p>
+        <p>Show Verification: {showVerification ? 'true' : 'false'}</p>
+        <p>Number of Transactions: {extractedTransactions.length}</p>
+      </div>
+      
+      {showVerification && extractedTransactions.length > 0 && (
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Verify Extracted Transactions</CardTitle>
+            <CardDescription>
+              Please verify the extracted transactions before saving them to your account.
+              Edit any incorrect values, select categories, and check the verify box for each correct transaction.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">Verify</TableHead>
+                    <TableHead className="w-[150px]">Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="w-[150px]">Category</TableHead>
+                    <TableHead className="w-[150px] text-right">Amount (₹)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {extractedTransactions.map((transaction, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Checkbox
+                          checked={transaction.isVerified}
+                          onCheckedChange={(checked) => 
+                            handleVerificationChange(index, checked as boolean)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="date"
+                          value={transaction.date}
+                          onChange={(e) => 
+                            handleTransactionEdit(index, 'date', e.target.value)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={transaction.description}
+                          onChange={(e) => 
+                            handleTransactionEdit(index, 'description', e.target.value)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={transaction.category}
+                          onValueChange={(value) =>
+                            handleTransactionEdit(index, 'category', value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map(category => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="number"
+                          value={transaction.amount}
+                          onChange={(e) => 
+                            handleTransactionEdit(index, 'amount', parseFloat(e.target.value))
+                          }
+                          className="text-right"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            
+            <div className="mt-4 flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowVerification(false);
+                  console.log('Hiding verification table');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveTransactions}
+                disabled={!extractedTransactions.some(t => t.isVerified)}
+              >
+                Save Verified Transactions
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">How it works</h2>

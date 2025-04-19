@@ -294,6 +294,26 @@ const rateCache: {
 // Cache duration - 24 hours as per API terms
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
+// Cache for economic indicators
+const economicIndicatorsCache: {
+  [key: string]: {
+    data: {
+      interestRate: string;
+      inflation: string;
+      gdpGrowth: string;
+      tradeBalance: string;
+    };
+    timestamp: number;
+  };
+} = {};
+
+// Cache duration for economic indicators - 6 hours
+const ECONOMIC_INDICATORS_CACHE_DURATION = 6 * 60 * 60 * 1000;
+
+// Rate limiting queue for API calls
+let lastApiCall = 0;
+const API_CALL_DELAY = 2000; // 2 seconds between calls
+
 /**
  * Get latest exchange rates with a specific base currency
  */
@@ -887,37 +907,63 @@ export const getEconomicIndicators = async (currency: string): Promise<{
 }> => {
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   
+  // Return fallback data if no API key
   if (!apiKey) {
     console.error("Missing Gemini API key");
-    // Return fallback data
-    return {
-      interestRate: currency === "USD" ? "5.25%" : currency === "EUR" ? "4.00%" : "3.50%",
-      inflation: currency === "USD" ? "3.4%" : currency === "EUR" ? "2.8%" : "4.2%",
-      gdpGrowth: currency === "USD" ? "2.8%" : currency === "EUR" ? "0.3%" : "2.1%",
-      tradeBalance: currency === "USD" ? "-$62.2B" : currency === "EUR" ? "+€28.7B" : "-$5.2B"
-    };
+    return getFallbackEconomicData(currency);
   }
   
-  const prompt = `
-    Provide the current key economic indicators for the country or region that uses ${currency} as its currency.
-    Include:
-    1. Current central bank interest rate
-    2. Current inflation rate
-    3. Latest GDP growth rate (year-over-year)
-    4. Latest trade balance figure with the currency symbol
-    
-    Format the response as valid JSON in this exact structure:
-    {
-      "interestRate": "X.XX%",
-      "inflation": "X.X%",
-      "gdpGrowth": "X.X%",
-      "tradeBalance": "+$XXB" or "-$XXB" (with appropriate currency symbol)
-    }
-    
-    Don't include any explanatory text before or after the JSON. Return only the JSON object.
-  `;
+  // Check cache first
+  const now = Date.now();
+  if (economicIndicatorsCache[currency] && 
+      (now - economicIndicatorsCache[currency].timestamp) < ECONOMIC_INDICATORS_CACHE_DURATION) {
+    return economicIndicatorsCache[currency].data;
+  }
+  
+  // Implement rate limiting
+  const timeSinceLastCall = now - lastApiCall;
+  if (timeSinceLastCall < API_CALL_DELAY) {
+    await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY - timeSinceLastCall));
+  }
   
   try {
+    // Try to get data from localStorage first
+    const localData = localStorage.getItem(`economic_indicators_${currency}`);
+    const localTimestamp = localStorage.getItem(`economic_indicators_${currency}_timestamp`);
+    
+    if (localData && localTimestamp) {
+      const timestamp = parseInt(localTimestamp, 10);
+      if (now - timestamp < ECONOMIC_INDICATORS_CACHE_DURATION) {
+        const parsedData = JSON.parse(localData);
+        economicIndicatorsCache[currency] = {
+          data: parsedData,
+          timestamp: timestamp
+        };
+        return parsedData;
+      }
+    }
+    
+    const prompt = `
+      Provide the current key economic indicators for the country or region that uses ${currency} as its currency.
+      Include:
+      1. Current central bank interest rate
+      2. Current inflation rate
+      3. Latest GDP growth rate (year-over-year)
+      4. Latest trade balance figure with the currency symbol
+      
+      Format the response as valid JSON in this exact structure:
+      {
+        "interestRate": "X.XX%",
+        "inflation": "X.X%",
+        "gdpGrowth": "X.X%",
+        "tradeBalance": "+$XXB" or "-$XXB" (with appropriate currency symbol)
+      }
+      
+      Don't include any explanatory text before or after the JSON. Return only the JSON object.
+    `;
+    
+    lastApiCall = Date.now();
+    
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
@@ -947,21 +993,39 @@ export const getEconomicIndicators = async (currency: string): Promise<{
     if (data.candidates && data.candidates[0]?.content?.parts && data.candidates[0].content.parts[0]?.text) {
       const jsonText = data.candidates[0].content.parts[0].text.trim();
       const result = JSON.parse(jsonText);
+      
+      // Cache the result both in memory and localStorage
+      economicIndicatorsCache[currency] = {
+        data: result,
+        timestamp: now
+      };
+      
+      try {
+        localStorage.setItem(`economic_indicators_${currency}`, JSON.stringify(result));
+        localStorage.setItem(`economic_indicators_${currency}_timestamp`, now.toString());
+      } catch (error) {
+        console.error("Error caching economic indicators:", error);
+      }
+      
       return result;
     } else {
       throw new Error("Unexpected response structure from Gemini API");
     }
   } catch (error) {
     console.error("Error getting economic indicators:", error);
-    // Return fallback data
-    return {
-      interestRate: currency === "USD" ? "5.25%" : currency === "EUR" ? "4.00%" : "3.50%",
-      inflation: currency === "USD" ? "3.4%" : currency === "EUR" ? "2.8%" : "4.2%",
-      gdpGrowth: currency === "USD" ? "2.8%" : currency === "EUR" ? "0.3%" : "2.1%",
-      tradeBalance: currency === "USD" ? "-$62.2B" : currency === "EUR" ? "+€28.7B" : "-$5.2B"
-    };
+    return getFallbackEconomicData(currency);
   }
 };
+
+// Helper function for fallback data
+function getFallbackEconomicData(currency: string) {
+  return {
+    interestRate: currency === "USD" ? "5.25%" : currency === "EUR" ? "4.00%" : "3.50%",
+    inflation: currency === "USD" ? "3.4%" : currency === "EUR" ? "2.8%" : "4.2%",
+    gdpGrowth: currency === "USD" ? "2.8%" : currency === "EUR" ? "0.3%" : "2.1%",
+    tradeBalance: currency === "USD" ? "-$62.2B" : currency === "EUR" ? "+€28.7B" : "-$5.2B"
+  };
+}
 
 // Add attribution link as required by API terms
 export const getAttributionLink = () => {
