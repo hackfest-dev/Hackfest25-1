@@ -13,21 +13,16 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: 'export',  // Enable static exports
   images: {
-    unoptimized: true,
-    domains: ['localhost'],
+    unoptimized: true, // Required for static export
   },
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
-  },
-  webpack: (config) => {
-    config.optimization.minimize = true;
-    return config;
-  },
+  }
 }
 
 if (userConfig) {
