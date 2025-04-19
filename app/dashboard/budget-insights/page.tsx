@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpRight } from "lucide-react";
 import useTransactions from "@/hooks/use-transactions";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, convertCurrency, getCurrencySymbol, CURRENCIES, getAttributionLink } from "@/lib/currency";
 import { CATEGORIES, getCategoryColor, getCategoryIcon } from "@/lib/transactionCategories";
+import useUserSettings from "@/hooks/use-user-settings";
 import { env } from "@/lib/env";
 
 interface CategoryStats {
@@ -58,6 +59,7 @@ interface AIInsights {
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 export default function BudgetInsightsPage() {
+  const { settings } = useUserSettings();
   const [activeTab, setActiveTab] = useState("overview");
   const [categoryStats, setCategoryStats] = useState<CategoryStats[]>([]);
   const [financialHealth, setFinancialHealth] = useState<FinancialHealth>({
@@ -69,6 +71,10 @@ export default function BudgetInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIInsights | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [convertedAmounts, setConvertedAmounts] = useState<Record<string, number>>({});
+
+  // Get user's base currency from settings
+  const baseCurrency = settings?.baseCurrency || "USD";
 
   // Get current month's transactions
   const now = new Date();
@@ -108,30 +114,51 @@ export default function BudgetInsightsPage() {
     }
   }, []);
 
+  // Convert amount to base currency
+  const convertToBaseCurrency = async (amount: number, fromCurrency: string) => {
+    if (fromCurrency === baseCurrency) return amount;
+    
+    try {
+      const converted = await convertCurrency(amount, fromCurrency, baseCurrency);
+      return converted;
+    } catch (error) {
+      console.error(`Error converting from ${fromCurrency} to ${baseCurrency}:`, error);
+      return amount; // Fallback to original amount
+    }
+  };
+
   useEffect(() => {
     if (!transactionsLoading && transactions) {
       calculateInsights();
     }
-  }, [transactions, transactionsLoading]);
+  }, [transactions, transactionsLoading, baseCurrency]);
 
-  const calculateInsights = () => {
-    // Calculate total income and expenses
-    const totalIncome = transactions
-      .filter(t => t.amount > 0)
-      .reduce((sum, t) => sum + t.amount, 0);
+  const calculateInsights = async () => {
+    // Convert all amounts to base currency first
+    const convertedTransactions = await Promise.all(
+      transactions.map(async (t) => ({
+        ...t,
+        convertedAmount: await convertToBaseCurrency(t.amount, t.currency || baseCurrency)
+      }))
+    );
 
-    const totalExpenses = transactions
-      .filter(t => t.amount < 0)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    // Calculate total income and expenses in base currency
+    const totalIncome = convertedTransactions
+      .filter(t => t.convertedAmount > 0)
+      .reduce((sum, t) => sum + t.convertedAmount, 0);
 
-    // Calculate category breakdown
+    const totalExpenses = convertedTransactions
+      .filter(t => t.convertedAmount < 0)
+      .reduce((sum, t) => sum + Math.abs(t.convertedAmount), 0);
+
+    // Calculate category breakdown with converted amounts
     const categoryGroups: Record<string, { amount: number; count: number }> = {};
     
-    transactions.forEach(transaction => {
-      if (transaction.amount < 0) { // Only expenses
+    convertedTransactions.forEach(transaction => {
+      if (transaction.convertedAmount < 0) { // Only expenses
         const category = transaction.category || "Other";
         categoryGroups[category] = categoryGroups[category] || { amount: 0, count: 0 };
-        categoryGroups[category].amount += Math.abs(transaction.amount);
+        categoryGroups[category].amount += Math.abs(transaction.convertedAmount);
         categoryGroups[category].count += 1;
       }
     });
@@ -146,7 +173,13 @@ export default function BudgetInsightsPage() {
 
     setCategoryStats(stats);
 
-    // Calculate financial health metrics
+    // Store converted amounts for reference
+    setConvertedAmounts({
+      totalIncome,
+      totalExpenses
+    });
+
+    // Calculate financial health metrics using converted amounts
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
     const debtToIncome = totalIncome > 0 ? (totalExpenses / totalIncome) * 100 : 0;
     const emergencyFundMonths = totalExpenses > 0 ? (totalIncome - totalExpenses) / (totalExpenses / 12) : 0;
@@ -185,14 +218,14 @@ export default function BudgetInsightsPage() {
 
       setLoadingAi(true);
       
-      // Prepare data for AI analysis
+      // Use converted amounts for AI analysis
       const analysisData = {
         transactions: transactions.map(t => ({
-          amount: t.amount,
+          amount: convertedAmounts[t.id] || t.amount,
           category: t.category,
           description: t.description,
           date: t.date,
-          currency: t.currency,
+          currency: baseCurrency, // Use base currency for analysis
           isRecurring: t.isRecurring
         })),
         categoryStats,
@@ -202,12 +235,9 @@ export default function BudgetInsightsPage() {
         savingsRate: financialHealth.savingsRate,
         debtToIncome: financialHealth.debtToIncome,
         emergencyFundMonths: financialHealth.emergencyFundMonths,
-        totalIncome: transactions
-          .filter(t => t.amount > 0)
-          .reduce((sum, t) => sum + t.amount, 0),
-        totalExpenses: transactions
-          .filter(t => t.amount < 0)
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+        totalIncome: convertedAmounts.totalIncome,
+        totalExpenses: convertedAmounts.totalExpenses,
+        baseCurrency // Add base currency info for context
       };
 
       // Call our API route
@@ -314,6 +344,9 @@ export default function BudgetInsightsPage() {
     }
   }, [loading, transactions]);
 
+  // Get attribution link
+  const attribution = getAttributionLink();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -331,6 +364,19 @@ export default function BudgetInsightsPage() {
             <p className="text-muted-foreground">
               Detailed analysis of your spending patterns and financial health
             </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-sm text-muted-foreground">
+              All amounts in {getCurrencySymbol(baseCurrency)}{baseCurrency}
+            </span>
+            <a 
+              href={attribution.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:underline"
+            >
+              {attribution.text}
+            </a>
           </div>
         </div>
 
@@ -389,7 +435,7 @@ export default function BudgetInsightsPage() {
                               <span>{stat.category}</span>
                             </div>
                             <span className="text-sm font-medium">
-                              {formatCurrency(stat.amount, "USD")}
+                              {formatCurrency(stat.amount, baseCurrency)}
                             </span>
                           </div>
                           <Progress 
@@ -439,7 +485,7 @@ export default function BudgetInsightsPage() {
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span>{formatCurrency(stat.amount, "USD")}</span>
+                          <span>{formatCurrency(stat.amount, baseCurrency)}</span>
                           <span>{stat.percentage.toFixed(1)}% of total</span>
                         </div>
                       </div>
@@ -723,4 +769,15 @@ export default function BudgetInsightsPage() {
       </div>
     </div>
   );
+}
+
+// Add TypeScript interface for Transaction
+interface Transaction {
+  id?: string;
+  amount: number;
+  category?: string;
+  description?: string;
+  date: string;
+  currency?: string;
+  isRecurring?: boolean;
 } 

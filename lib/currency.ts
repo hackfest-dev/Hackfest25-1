@@ -5,6 +5,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
   ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/exchange-rates`
   : 'http://localhost:3050/api/exchange-rates';
 
+// Base URL for the Exchange Rate API - using free tier
+const EXCHANGE_RATE_API_URL = 'https://open.er-api.com/v6/latest';
+
 // Base URL for the ExchangeRate API - using a more reliable free API
 const API_KEY = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY || '';
 
@@ -280,38 +283,65 @@ export const NOMAD_DESTINATIONS: CountryData[] = [
   { name: "Berlin", code: "DE", currency: "EUR", flag: "🇩🇪", continent: "Europe" },
 ];
 
+// Cache for exchange rates
+const rateCache: {
+  [key: string]: {
+    rates: { [key: string]: number };
+    timestamp: number;
+  };
+} = {};
+
+// Cache duration - 24 hours as per API terms
+const CACHE_DURATION = 24 * 60 * 60 * 1000;
+
 /**
  * Get latest exchange rates with a specific base currency
  */
 export const getLatestRates = async (baseCurrency: string = 'USD'): Promise<ExchangeRateData> => {
   try {
-    // Try primary API first
-    const response = await axios.get(`${API_BASE_URL}/latest/${baseCurrency}`);
-    return {
-      base: baseCurrency,
-      date: new Date().toISOString().split('T')[0],
-      rates: response.data.rates,
-      success: true,
-      timestamp: Math.floor(Date.now() / 1000)
-    };
-  } catch (error) {
-    console.error('Error fetching from primary API, trying backup API:', error);
-    
-    try {
-      // Try backup API
-      const backupResponse = await axios.get(`https://api.exchangerate.host/latest?base=${baseCurrency}`);
-      return backupResponse.data;
-    } catch (backupError) {
-      console.error('Error fetching from backup API, using fallback rates:', backupError);
-      // Only use fallback rates if both APIs fail
+    // Check cache first
+    const now = Date.now();
+    if (rateCache[baseCurrency] && (now - rateCache[baseCurrency].timestamp) < CACHE_DURATION) {
       return {
         base: baseCurrency,
         date: new Date().toISOString().split('T')[0],
-        rates: convertRatesFromUSD(baseCurrency),
+        rates: rateCache[baseCurrency].rates,
         success: true,
-        timestamp: Math.floor(Date.now() / 1000)
+        timestamp: Math.floor(now / 1000)
       };
     }
+
+    // Fetch fresh rates from API
+    const response = await fetch(`${EXCHANGE_RATE_API_URL}/${baseCurrency}`);
+    const data = await response.json();
+
+    if (!response.ok || data.result === 'error') {
+      throw new Error(data['error-type'] || 'Failed to fetch exchange rates');
+    }
+
+    // Update cache
+    rateCache[baseCurrency] = {
+      rates: data.rates,
+      timestamp: now
+    };
+
+    return {
+      base: baseCurrency,
+      date: new Date().toISOString().split('T')[0],
+      rates: data.rates,
+      success: true,
+      timestamp: Math.floor(now / 1000)
+    };
+  } catch (error) {
+    console.error('Error fetching exchange rates:', error);
+    // Fallback to static rates if API fails
+    return {
+      base: baseCurrency,
+      date: new Date().toISOString().split('T')[0],
+      rates: convertRatesFromUSD(baseCurrency),
+      success: true,
+      timestamp: Math.floor(Date.now() / 1000)
+    };
   }
 };
 
@@ -340,29 +370,21 @@ const convertRatesFromUSD = (baseCurrency: string): { [key: string]: number } =>
 };
 
 /**
- * Get exchange rate between two currencies using our API route
+ * Get exchange rate between two currencies
  */
 export async function getExchangeRate(from: string, to: string): Promise<number> {
   try {
-    // Use relative URL to automatically handle development/production environments
-    const response = await fetch(`/api/exchange-rates?from=${from}&to=${to}`);
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch exchange rate');
-    }
-
-    const data = await response.json();
-    return data.rate;
+    // Get rates with 'from' currency as base
+    const { rates } = await getLatestRates(from);
+    return rates[to] || 1;
   } catch (error) {
-    console.error('Error fetching exchange rate:', error);
-    
-    // Fallback to static rates if API fails
+    console.error('Error getting exchange rate:', error);
+    // Fallback to static rates
     if (from === 'USD') {
       return FALLBACK_RATES[to] || 1;
     } else if (to === 'USD') {
       return 1 / (FALLBACK_RATES[from] || 1);
     } else {
-      // Convert through USD as intermediary
       const fromUSD = FALLBACK_RATES[from] || 1;
       const toUSD = FALLBACK_RATES[to] || 1;
       return toUSD / fromUSD;
@@ -371,7 +393,7 @@ export async function getExchangeRate(from: string, to: string): Promise<number>
 }
 
 /**
- * Convert an amount from one currency to another using our API route
+ * Convert an amount from one currency to another
  */
 export const convertCurrency = async (
   amount: number,
@@ -379,14 +401,8 @@ export const convertCurrency = async (
   toCurrency: string
 ): Promise<number> => {
   try {
-    const response = await axios.get(API_BASE_URL, {
-      params: {
-        from: fromCurrency,
-        to: toCurrency,
-        amount
-      }
-    });
-    return response.data.conversion_result;
+    const rate = await getExchangeRate(fromCurrency, toCurrency);
+    return amount * rate;
   } catch (error) {
     console.error('Error converting currency:', error);
     // Use fallback rates if API fails
@@ -493,16 +509,6 @@ export const getCurrencyForCountry = (countryCode: string): string => {
   return COUNTRY_TO_CURRENCY[countryCode] || 'USD';
 };
 
-// Keep the rate cache implementation
-const rateCache: {
-  [key: string]: {
-    rate: number;
-    timestamp: number;
-  };
-} = {};
-
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
 /**
  * Get cached exchange rate or fetch new one
  */
@@ -512,7 +518,7 @@ export const getCachedExchangeRate = async (fromCurrency: string, toCurrency: st
   
   // Check cache first
   if (rateCache[cacheKey] && (now - rateCache[cacheKey].timestamp) < CACHE_DURATION) {
-    return rateCache[cacheKey].rate;
+    return rateCache[cacheKey].rates[toCurrency] || 1;
   }
   
   // Fetch new rate
@@ -520,7 +526,7 @@ export const getCachedExchangeRate = async (fromCurrency: string, toCurrency: st
   
   // Update cache
   rateCache[cacheKey] = {
-    rate,
+    rates: { [toCurrency]: rate },
     timestamp: now
   };
   
@@ -955,4 +961,12 @@ export const getEconomicIndicators = async (currency: string): Promise<{
       tradeBalance: currency === "USD" ? "-$62.2B" : currency === "EUR" ? "+€28.7B" : "-$5.2B"
     };
   }
+};
+
+// Add attribution link as required by API terms
+export const getAttributionLink = () => {
+  return {
+    text: "Rates By Exchange Rate API",
+    url: "https://www.exchangerate-api.com"
+  };
 }; 
