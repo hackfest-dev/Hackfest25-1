@@ -22,6 +22,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  output: 'standalone',
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
